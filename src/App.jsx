@@ -196,7 +196,7 @@ export default function App() {
       const fileYear = yearMatch ? yearMatch[1] : null;
 
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+      const wb = XLSX.read(buf, { type: "array", cellDates: true, raw: false });
       const newTeams = [...data.teams];
       const newPlayers = [...data.players];
       const newScores = { ...data.scores };
@@ -226,8 +226,16 @@ export default function App() {
           let isoDate = null;
           let eventYear = fileYear;
           const num = Number(raw);
-          if (!isNaN(num) && num > 40000 && num < 60000) {
-            // Numero seriale Excel: 1 = 1 gennaio 1900
+          // Controlla se è un oggetto Date (quando cellDates: true)
+          if (eName instanceof Date) {
+            const d = eName;
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            isoDate = `${yyyy}-${mm}-${dd}`;
+            eventYear = String(yyyy);
+          } else if (!isNaN(num) && num > 40000 && num < 60000) {
+            // Numero seriale Excel
             const excelEpoch = new Date(1899, 11, 30);
             const d = new Date(excelEpoch.getTime() + num * 86400000);
             const yyyy = d.getFullYear();
@@ -274,14 +282,18 @@ export default function App() {
             if (!ev) return;
             if (!newScores[ev.id]) newScores[ev.id] = {};
             const v = String(val).trim();
+            // val può essere numero diretto o stringa
+            const rawNum = typeof val === "number" ? val : null;
             if (v === "-" || v.toLowerCase() === "assente") {
               newScores[ev.id][player.id] = "absent";
+            } else if (rawNum !== null && rawNum > 0) {
+              newScores[ev.id][player.id] = Math.round(rawNum);
+              imported.scores++;
             } else if (v !== "" && v !== "0") {
               // Gestisce virgola decimale italiana (53348,8 -> 53349)
               const normalized = v.replace(",", ".").replace(/[^0-9.]/g, "");
               const num = Math.round(parseFloat(normalized));
               if (!isNaN(num) && num > 0) { newScores[ev.id][player.id] = num; imported.scores++; }
-              // celle vuote o zero: non registriamo nulla
             }
           });
         });

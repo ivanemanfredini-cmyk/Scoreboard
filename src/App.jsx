@@ -977,7 +977,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LOGIN */}}
+        {/* LOGIN */}
         {page === "login" && (
           <div style={{ maxWidth: 360, margin: "60px auto" }}>
             <div className="card">

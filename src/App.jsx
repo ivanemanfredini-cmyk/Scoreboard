@@ -43,7 +43,8 @@ export default function App() {
   const [selectedTeamFilter, setSelectedTeamFilter] = useState("all");
   const [selectedYearFilter, setSelectedYearFilter] = useState("all");
   const [playerStatusFilter, setPlayerStatusFilter] = useState("active");
-  const [chartPlayer, setChartPlayer] = useState(null);
+  const [chartPlayers, setChartPlayers] = useState([]);
+  const [chartTeamFilter, setChartTeamFilter] = useState("all");
   const [chartYear, setChartYear] = useState("all");
   const [selectedMonthFilter, setSelectedMonthFilter] = useState("all");
   const [chartMonth, setChartMonth] = useState("all");
@@ -119,6 +120,8 @@ export default function App() {
     });
   }, [data, filteredEvents]);
 
+  const [rankSortKey, setRankSortKey] = useState("avg");
+
   const sortedPlayers = useMemo(() => [...playerStats]
     .filter(p => {
       if (playerStatusFilter === "active") return p.active !== false;
@@ -126,7 +129,12 @@ export default function App() {
       return true;
     })
     .filter(p => selectedTeamFilter === "all" || p.teamId === selectedTeamFilter)
-    .sort((a, b) => b.total - a.total), [playerStats, selectedTeamFilter, playerStatusFilter]);
+    .sort((a, b) => {
+      if (rankSortKey === "avg") return b.avg - a.avg;
+      if (rankSortKey === "count") return b.count - a.count;
+      if (rankSortKey === "best") return b.best - a.best;
+      return b.avg - a.avg;
+    }), [playerStats, selectedTeamFilter, playerStatusFilter, rankSortKey]);
 
   const sortedEvents = useMemo(() => [...filteredEvents].sort((a, b) => new Date(b.date) - new Date(a.date)), [filteredEvents]);
 
@@ -141,15 +149,22 @@ export default function App() {
   }, [data.events, chartYear, chartMonth]);
 
   const chartData = useMemo(() => {
-    if (!chartPlayer) return [];
-    let cumulative = 0;
-    return [...chartFilteredEvents].sort((a, b) => new Date(a.date) - new Date(b.date)).map(e => {
-      const s = data.scores[e.id]?.[chartPlayer];
-      const score = (s !== undefined && s !== "absent" && s !== "") ? s : null;
-      if (score !== null) cumulative += score;
-      return { name: e.name || e.date, score, cumulative: score !== null ? cumulative : null };
+    if (chartPlayers.length === 0) return [];
+    const events = [...chartFilteredEvents].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const cumulatives = {};
+    chartPlayers.forEach(pid => { cumulatives[pid] = 0; });
+    return events.map(e => {
+      const point = { name: e.date || e.name };
+      chartPlayers.forEach(pid => {
+        const s = data.scores[e.id]?.[pid];
+        const score = (s !== undefined && s !== "absent" && s !== "") ? s : null;
+        point[`score_${pid}`] = score;
+        if (score !== null) cumulatives[pid] += score;
+        point[`cum_${pid}`] = score !== null ? cumulatives[pid] : null;
+      });
+      return point;
     });
-  }, [chartPlayer, chartFilteredEvents, data.scores]);
+  }, [chartPlayers, chartFilteredEvents, data.scores]);
 
   const addTeam = async () => { if (!newTeam.trim()) return; await persist({ ...data, teams: [...data.teams, { id: Date.now().toString(), name: newTeam.trim() }] }); setNewTeam(""); showToast("Team aggiunto!"); };
   const removeTeam = async (id) => { await persist({ ...data, teams: data.teams.filter(t => t.id !== id), players: data.players.filter(p => p.teamId !== id) }); showToast("Team rimosso", "err"); };
@@ -458,8 +473,13 @@ export default function App() {
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
-                        {["#","Player","Team","Presenze","Assenze","Best","Media","Totale"].map(h => (
-                          <th key={h} style={{ padding: "12px 14px", textAlign: ["Player","Team"].includes(h) ? "left" : "center", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>{h}</th>
+                        {["#","Player","Team"].map(h => (
+                          <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                        {[["count","Presenze"],["absences","Assenze"],["best","Best"],["avg","Media"]].map(([key, label]) => (
+                          <th key={key} onClick={() => setRankSortKey(key)} style={{ padding: "12px 14px", textAlign: "center", fontSize: 11, fontWeight: 700, color: rankSortKey === key ? "#f97316" : "#555", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}>
+                            {label}{rankSortKey === key ? " ▼" : ""}
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -483,8 +503,7 @@ export default function App() {
                           <td style={{ padding: "12px 14px", textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{p.count}</td>
                           <td style={{ padding: "12px 14px", textAlign: "center", color: p.absences > 0 ? "#ef4444" : "#444", fontWeight: 700 }}>{p.absences}</td>
                           <td style={{ padding: "12px 14px", textAlign: "center", color: "#eab308", fontWeight: 700 }}>{fmtNum(p.best)}</td>
-                          <td style={{ padding: "12px 14px", textAlign: "center", color: "#aaa", fontWeight: 600 }}>{fmtNum(p.avg)}</td>
-                          <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 800, fontSize: 18, color: "#f97316" }}>{fmtNum(p.total)}</td>
+                          <td style={{ padding: "12px 14px", textAlign: "center", color: rankSortKey === "avg" ? "#f97316" : "#aaa", fontWeight: rankSortKey === "avg" ? 800 : 600, fontSize: rankSortKey === "avg" ? 17 : 14 }}>{fmtNum(p.avg)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -496,63 +515,74 @@ export default function App() {
 
         {/* HALL OF FAME */}
         {page === "hall" && (() => {
-          const allStats = [...playerStats].sort((a, b) => b.total - a.total);
-          const historic = allStats.filter(p => p.active === false);
-          const topScorer = [...playerStats].sort((a, b) => b.best - a.best)[0];
-          const topAvg = [...playerStats].filter(p => p.count >= 3).sort((a, b) => b.avg - a.avg)[0];
-          const mostPresent = [...playerStats].sort((a, b) => b.count - a.count)[0];
+          const totalEvents = filteredEvents.length;
+          const minPresenze = Math.ceil(totalEvents * 0.5);
+          const eligible = playerStats.filter(p => p.count >= minPresenze);
+          const top10avg = [...eligible].sort((a, b) => b.avg - a.avg).slice(0, 10);
+          const top10best = [...eligible].sort((a, b) => b.best - a.best).slice(0, 10);
+          const top10presence = [...playerStats].sort((a, b) => b.count - a.count).slice(0, 10);
+          const historic = [...playerStats].filter(p => p.active === false).sort((a, b) => b.avg - a.avg);
+
+          const HallTable = ({ players, valueKey, valueLabel, valueColor }) => (
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
+                    {["#","Player","Team","Presenze", valueLabel].map(h => (
+                      <th key={h} style={{ padding: "10px 14px", textAlign: ["Player","Team"].includes(h) ? "left" : "center", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.map((p, i) => (
+                    <tr key={p.id} className="tr" style={{ borderBottom: "1px solid #1c1c28" }}>
+                      <td style={{ padding: "10px 14px", textAlign: "center", width: 36 }}>
+                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : <span style={{ color: "#444", fontWeight: 700 }}>{i+1}</span>}
+                      </td>
+                      <td style={{ padding: "10px 14px", fontWeight: 700 }}>
+                        <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: playerColor(p.id), marginRight: 7 }}></span>{p.name}
+                      </td>
+                      <td style={{ padding: "10px 14px", color: "#888", fontSize: 13 }}>{p.teamName}</td>
+                      <td style={{ padding: "10px 14px", textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{p.count}</td>
+                      <td style={{ padding: "10px 14px", textAlign: "center", fontWeight: 800, fontSize: 16, color: valueColor }}>{fmtNum(p[valueKey])}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+
           return (
             <div>
-              <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 20 }}>🏆 Hall of Fame</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 28 }}>
-                {[
-                  { label: "🥇 Top Totale", p: allStats[0], val: fmtNum(allStats[0]?.total) + " pt" },
-                  { label: "⚡ Miglior Score", p: topScorer, val: fmtNum(topScorer?.best) },
-                  { label: "📊 Miglior Media", p: topAvg, val: fmtNum(topAvg?.avg) + " avg" },
-                  { label: "📅 Più Presente", p: mostPresent, val: mostPresent?.count + " eventi" },
-                ].map(({ label, p, val }) => p ? (
-                  <div key={label} className="card" style={{ textAlign: "center", padding: "18px 12px" }}>
-                    <div style={{ color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>{label}</div>
-                    <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>
-                      <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: playerColor(p.id), marginRight: 6 }}></span>
-                      {p.name}
-                    </div>
-                    <div style={{ color: "#f97316", fontWeight: 800, fontSize: 16 }}>{val}</div>
-                  </div>
-                ) : null)}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>🏆 Hall of Fame</h2>
+                <YearFilter value={selectedYearFilter} onChange={setSelectedYearFilter} />
               </div>
-              <h3 style={{ fontSize: 20, fontWeight: 800, textTransform: "uppercase", color: "#888", marginBottom: 14 }}>📦 Player Storici ({historic.length})</h3>
-              {historic.length === 0
-                ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 30 }}>Nessun player storico. Puoi marcare un player come storico nella sezione ⚙️ Gestisci.</div>
-                : <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
-                          {["#","Player","Team","Presenze","Best","Media","Totale"].map(h => (
-                            <th key={h} style={{ padding: "12px 14px", textAlign: ["Player","Team"].includes(h) ? "left" : "center", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em" }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {historic.map((p, i) => (
-                          <tr key={p.id} className="tr" style={{ borderBottom: "1px solid #1c1c28", opacity: 0.7 }}>
-                            <td style={{ padding: "12px 14px", textAlign: "center", width: 36 }}>
-                              {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : <span style={{ color: "#444" }}>{i+1}</span>}
-                            </td>
-                            <td style={{ padding: "12px 14px", fontWeight: 700 }}>
-                              <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: playerColor(p.id), marginRight: 8 }}></span>{p.name}
-                            </td>
-                            <td style={{ padding: "12px 14px", color: "#888", fontSize: 13 }}>{p.teamName}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{p.count}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", color: "#eab308", fontWeight: 700 }}>{fmtNum(p.best)}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", color: "#aaa" }}>{fmtNum(p.avg)}</td>
-                            <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 800, fontSize: 18, color: "#f97316" }}>{fmtNum(p.total)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-              }
+              {totalEvents > 0 && <p style={{ color: "#555", fontSize: 12, marginBottom: 20 }}>Qualifica: minimo {minPresenze} presenze su {totalEvents} eventi ({Math.round(minPresenze/totalEvents*100)}%)</p>}
+
+              <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 10 }}>📊 Top 10 Media</h3>
+              <div style={{ marginBottom: 24 }}>
+                {top10avg.length === 0 ? <div className="card" style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player con abbastanza presenze.</div>
+                  : <HallTable players={top10avg} valueKey="avg" valueLabel="Media" valueColor="#f97316" />}
+              </div>
+
+              <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#eab308", marginBottom: 10 }}>⚡ Top 10 Miglior Score</h3>
+              <div style={{ marginBottom: 24 }}>
+                {top10best.length === 0 ? <div className="card" style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player con abbastanza presenze.</div>
+                  : <HallTable players={top10best} valueKey="best" valueLabel="Best Score" valueColor="#eab308" />}
+              </div>
+
+              <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#22c55e", marginBottom: 10 }}>📅 Top 10 Presenze</h3>
+              <div style={{ marginBottom: 24 }}>
+                <HallTable players={top10presence} valueKey="count" valueLabel="Presenze" valueColor="#22c55e" />
+              </div>
+
+              {historic.length > 0 && (
+                <>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#888", marginBottom: 10 }}>📦 Player Storici ({historic.length})</h3>
+                  <HallTable players={historic} valueKey="avg" valueLabel="Media" valueColor="#888" />
+                </>
+              )}
             </div>
           );
         })()}
@@ -726,58 +756,112 @@ export default function App() {
         {/* GRAFICI */}
         {page === "charts" && (
           <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
               <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>📈 Grafici</h2>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <YearFilter value={chartYear} onChange={setChartYear} />
                 <MonthFilter yearValue={chartYear} monthValue={chartMonth} onMonthChange={setChartMonth} />
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {data.players.map(p => (
-                <button key={p.id} onClick={() => setChartPlayer(p.id)}
-                  style={{ background: chartPlayer === p.id ? playerColor(p.id) : "#1c1c28", border: `1px solid ${chartPlayer === p.id ? playerColor(p.id) : "#2e2e3e"}`, color: chartPlayer === p.id ? "#000" : "#aaa", fontFamily: "inherit", fontWeight: 700, fontSize: 13, padding: "7px 14px", borderRadius: 20, cursor: "pointer", transition: "all .15s", opacity: p.active === false ? 0.5 : 1 }}>
-                  {p.name}
-                </button>
-              ))}
-              {data.players.length === 0 && <div style={{ color: "#444" }}>Nessun player ancora.</div>}
+            {/* Filtro team */}
+            {data.teams.length > 0 && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ color: "#555", fontSize: 12, textTransform: "uppercase", letterSpacing: ".06em" }}>Team:</span>
+                <button className={`filter-btn${chartTeamFilter === "all" ? " on" : ""}`} onClick={() => setChartTeamFilter("all")}>Tutti</button>
+                {data.teams.map(t => (
+                  <button key={t.id} className={`filter-btn${chartTeamFilter === t.id ? " on" : ""}`} onClick={() => setChartTeamFilter(t.id)}>{t.name}</button>
+                ))}
+              </div>
+            )}
+            {/* Selezione player (max 5) */}
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ color: "#555", fontSize: 12, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>
+                Player ({chartPlayers.length}/5) — clicca per selezionare/deselezionare:
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {data.players
+                  .filter(p => chartTeamFilter === "all" || p.teamId === chartTeamFilter)
+                  .map(p => {
+                    const selected = chartPlayers.includes(p.id);
+                    const col = playerColor(p.id);
+                    return (
+                      <button key={p.id}
+                        onClick={() => {
+                          if (selected) setChartPlayers(prev => prev.filter(id => id !== p.id));
+                          else if (chartPlayers.length < 5) setChartPlayers(prev => [...prev, p.id]);
+                        }}
+                        style={{ background: selected ? col : "#1c1c28", border: `2px solid ${selected ? col : "#2e2e3e"}`, color: selected ? "#000" : "#aaa", fontFamily: "inherit", fontWeight: 700, fontSize: 13, padding: "7px 14px", borderRadius: 20, cursor: chartPlayers.length >= 5 && !selected ? "not-allowed" : "pointer", transition: "all .15s", opacity: (chartPlayers.length >= 5 && !selected) ? 0.3 : p.active === false ? 0.6 : 1 }}>
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                {data.players.length === 0 && <div style={{ color: "#444" }}>Nessun player ancora.</div>}
+              </div>
             </div>
-            {!chartPlayer
-              ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Seleziona un player per vedere il grafico.</div>
+            {chartPlayers.length > 0 && (
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "5px 12px", marginBottom: 16 }} onClick={() => setChartPlayers([])}>✕ Deseleziona tutti</button>
+            )}
+
+            {chartPlayers.length === 0
+              ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Seleziona fino a 5 player per vedere il grafico.</div>
               : (() => {
-                  const stats = playerStats.find(pl => pl.id === chartPlayer);
-                  const color = playerColor(chartPlayer);
+                  // Stats cards per ogni player selezionato
+                  const selectedStats = chartPlayers.map(pid => playerStats.find(pl => pl.id === pid)).filter(Boolean);
                   return (
                     <div>
-                      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                        {[["Totale", fmtNum(stats?.total)], ["Media", fmtNum(stats?.avg)], ["Best", fmtNum(stats?.best)], ["Presenze", stats?.count], ["Assenze", stats?.absences]].map(([label, val]) => (
-                          <div key={label} className="card" style={{ flex: 1, minWidth: 90, textAlign: "center", padding: "14px 10px" }}>
-                            <div style={{ color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 6 }}>{label}</div>
-                            <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}</div>
-                          </div>
-                        ))}
+                      {/* Stat cards */}
+                      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                        {selectedStats.map(p => {
+                          const col = playerColor(p.id);
+                          return (
+                            <div key={p.id} className="card" style={{ flex: 1, minWidth: 140, padding: "12px 14px", borderColor: col }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                                <span style={{ width: 10, height: 10, borderRadius: "50%", background: col, display: "inline-block" }}></span>
+                                <span style={{ fontWeight: 800, fontSize: 14, color: col }}>{p.name}</span>
+                              </div>
+                              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                                {[["Media", fmtNum(p.avg)], ["Best", fmtNum(p.best)], ["Presenze", p.count]].map(([label, val]) => (
+                                  <div key={label}>
+                                    <div style={{ color: "#555", fontSize: 10, textTransform: "uppercase" }}>{label}</div>
+                                    <div style={{ fontWeight: 800, fontSize: 15, color: "#f0f0f0" }}>{val}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
+                      {/* Grafico punteggi */}
                       <div className="card" style={{ marginBottom: 16 }}>
                         <p style={{ color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 14 }}>Punteggio per Evento</p>
-                        <ResponsiveContainer width="100%" height={220}>
-                          <LineChart data={chartData.filter(d => d.score !== null)} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                        <ResponsiveContainer width="100%" height={260}>
+                          <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
                             <XAxis dataKey="name" tick={{ fill: "#555", fontSize: 10 }} />
                             <YAxis tick={{ fill: "#555", fontSize: 11 }} tickFormatter={v => v.toLocaleString("it-IT")} />
-                            <Tooltip contentStyle={{ background: "#1c1c28", border: "1px solid #2e2e3e", borderRadius: 8, color: "#f0f0f0" }} formatter={v => v.toLocaleString("it-IT")} />
-                            <Line type="monotone" dataKey="score" stroke={color} strokeWidth={2.5} dot={{ r: 4, fill: color }} name="Punteggio" />
+                            <Tooltip contentStyle={{ background: "#1c1c28", border: "1px solid #2e2e3e", borderRadius: 8, color: "#f0f0f0" }} formatter={(v, name) => [v?.toLocaleString("it-IT"), name]} />
+                            {chartPlayers.map(pid => {
+                              const col = playerColor(pid);
+                              const p = data.players.find(pl => pl.id === pid);
+                              return <Line key={pid} type="monotone" dataKey={`score_${pid}`} stroke={col} strokeWidth={2.5} dot={{ r: 3, fill: col }} name={p?.name || pid} connectNulls={false} />;
+                            })}
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
+                      {/* Grafico cumulativo */}
                       <div className="card">
                         <p style={{ color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 14 }}>Punteggio Cumulativo</p>
-                        <ResponsiveContainer width="100%" height={220}>
-                          <LineChart data={chartData.filter(d => d.cumulative !== null)} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                        <ResponsiveContainer width="100%" height={260}>
+                          <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
                             <XAxis dataKey="name" tick={{ fill: "#555", fontSize: 10 }} />
                             <YAxis tick={{ fill: "#555", fontSize: 11 }} tickFormatter={v => v.toLocaleString("it-IT")} />
-                            <Tooltip contentStyle={{ background: "#1c1c28", border: "1px solid #2e2e3e", borderRadius: 8, color: "#f0f0f0" }} formatter={v => v.toLocaleString("it-IT")} />
-                            <Line type="monotone" dataKey="cumulative" stroke={color} strokeWidth={2.5} dot={{ r: 4, fill: color }} name="Cumulativo" />
+                            <Tooltip contentStyle={{ background: "#1c1c28", border: "1px solid #2e2e3e", borderRadius: 8, color: "#f0f0f0" }} formatter={(v, name) => [v?.toLocaleString("it-IT"), name]} />
+                            {chartPlayers.map(pid => {
+                              const col = playerColor(pid);
+                              const p = data.players.find(pl => pl.id === pid);
+                              return <Line key={pid} type="monotone" dataKey={`cum_${pid}`} stroke={col} strokeWidth={2.5} dot={{ r: 3, fill: col }} name={p?.name || pid} connectNulls={false} />;
+                            })}
                           </LineChart>
                         </ResponsiveContainer>
                       </div>

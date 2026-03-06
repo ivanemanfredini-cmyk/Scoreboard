@@ -848,23 +848,7 @@ export default function App() {
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
-                      {/* Grafico cumulativo */}
-                      <div className="card">
-                        <p style={{ color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 14 }}>Punteggio Cumulativo</p>
-                        <ResponsiveContainer width="100%" height={260}>
-                          <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1c1c28" />
-                            <XAxis dataKey="name" tick={{ fill: "#555", fontSize: 10 }} />
-                            <YAxis tick={{ fill: "#555", fontSize: 11 }} tickFormatter={v => v.toLocaleString("it-IT")} />
-                            <Tooltip contentStyle={{ background: "#1c1c28", border: "1px solid #2e2e3e", borderRadius: 8, color: "#f0f0f0" }} formatter={(v, name) => [v?.toLocaleString("it-IT"), name]} />
-                            {chartPlayers.map(pid => {
-                              const col = playerColor(pid);
-                              const p = data.players.find(pl => pl.id === pid);
-                              return <Line key={pid} type="monotone" dataKey={`cum_${pid}`} stroke={col} strokeWidth={2.5} dot={{ r: 3, fill: col }} name={p?.name || pid} connectNulls={false} />;
-                            })}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
+
                     </div>
                   );
                 })()

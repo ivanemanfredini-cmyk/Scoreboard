@@ -41,75 +41,128 @@ export default function App() {
   const [activeEventId, setActiveEventId] = useState(null);
   const [scoreInputs, setScoreInputs] = useState({});
   const [selectedTeamFilter, setSelectedTeamFilter] = useState("all");
+  const [selectedYearFilter, setSelectedYearFilter] = useState("all");
+  const [playerStatusFilter, setPlayerStatusFilter] = useState("active");
   const [chartPlayer, setChartPlayer] = useState(null);
+  const [chartYear, setChartYear] = useState("all");
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState("all");
+  const [chartMonth, setChartMonth] = useState("all");
 
-  // Carica dati da Firebase in tempo reale
   useEffect(() => {
     const unsub = onSnapshot(DATA_DOC, (snap) => {
-      if (snap.exists()) {
-        setData(snap.data());
-      } else {
-        setData(emptyData);
-      }
+      if (snap.exists()) setData(snap.data());
+      else setData(emptyData);
       setLoading(false);
-    }, (err) => {
-      console.error(err);
-      setLoading(false);
-    });
+    }, () => setLoading(false));
     return () => unsub();
   }, []);
 
   const persist = async (updated) => {
     setSaving(true);
-    try {
-      await setDoc(DATA_DOC, updated);
-      setData(updated);
-    } catch (e) {
-      showToast("Errore salvataggio!", "err");
-    }
+    try { await setDoc(DATA_DOC, updated); setData(updated); }
+    catch { showToast("Errore salvataggio!", "err"); }
     setSaving(false);
   };
 
-  const showToast = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2500); };
+  const showToast = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2800); };
+
+  // Anni e mesi disponibili dagli eventi
+  const availableYears = useMemo(() => {
+    const years = new Set();
+    data.events.forEach(e => {
+      const y = e.year || (e.date ? e.date.substring(0, 4) : null);
+      if (y) years.add(y);
+    });
+    return [...years].sort((a, b) => b - a);
+  }, [data.events]);
+
+  const MONTHS = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+
+  const availableMonths = useMemo(() => {
+    const months = new Set();
+    const eventsToCheck = selectedYearFilter === "all" ? data.events : data.events.filter(e => {
+      const y = e.year || (e.date ? e.date.substring(0, 4) : null);
+      return y === selectedYearFilter;
+    });
+    eventsToCheck.forEach(e => {
+      if (e.date && e.date.length >= 7) {
+        const m = e.date.substring(5, 7);
+        if (m) months.add(m);
+      }
+    });
+    return [...months].sort();
+  }, [data.events, selectedYearFilter]);
+
+  // Filtra eventi per anno e mese
+  const filteredEvents = useMemo(() => {
+    return data.events.filter(e => {
+      const y = e.year || (e.date ? e.date.substring(0, 4) : null);
+      const m = e.date ? e.date.substring(5, 7) : null;
+      if (selectedYearFilter !== "all" && y !== selectedYearFilter) return false;
+      if (selectedMonthFilter !== "all" && m !== selectedMonthFilter) return false;
+      return true;
+    });
+  }, [data.events, selectedYearFilter, selectedMonthFilter]);
 
   const playerStats = useMemo(() => {
     return data.players.map(p => {
       let total = 0, count = 0, absences = 0, best = 0;
-      data.events.forEach(e => {
+      filteredEvents.forEach(e => {
         const s = data.scores[e.id]?.[p.id];
         if (s === "absent") absences++;
         else if (s !== undefined && s !== "") { total += s; count++; if (s > best) best = s; }
       });
       const avg = count > 0 ? Math.round(total / count) : 0;
       const team = data.teams.find(t => t.id === p.teamId);
-      return { ...p, total, count, absences, avg, best, teamName: team?.name || "—" };
+      return { ...p, total, count, absences, avg, best, teamName: team?.name || "—", active: p.active !== false };
     });
-  }, [data]);
+  }, [data, filteredEvents]);
 
   const sortedPlayers = useMemo(() => [...playerStats]
+    .filter(p => {
+      if (playerStatusFilter === "active") return p.active !== false;
+      if (playerStatusFilter === "historic") return p.active === false;
+      return true;
+    })
     .filter(p => selectedTeamFilter === "all" || p.teamId === selectedTeamFilter)
-    .sort((a, b) => b.total - a.total), [playerStats, selectedTeamFilter]);
+    .sort((a, b) => b.total - a.total), [playerStats, selectedTeamFilter, playerStatusFilter]);
 
-  const sortedEvents = useMemo(() => [...data.events].sort((a, b) => new Date(b.date) - new Date(a.date)), [data.events]);
+  const sortedEvents = useMemo(() => [...filteredEvents].sort((a, b) => new Date(b.date) - new Date(a.date)), [filteredEvents]);
+
+  const chartFilteredEvents = useMemo(() => {
+    return data.events.filter(e => {
+      const y = e.year || (e.date ? e.date.substring(0, 4) : null);
+      const m = e.date ? e.date.substring(5, 7) : null;
+      if (chartYear !== "all" && y !== chartYear) return false;
+      if (chartMonth !== "all" && m !== chartMonth) return false;
+      return true;
+    });
+  }, [data.events, chartYear, chartMonth]);
 
   const chartData = useMemo(() => {
     if (!chartPlayer) return [];
     let cumulative = 0;
-    return [...data.events].sort((a, b) => new Date(a.date) - new Date(b.date)).map(e => {
+    return [...chartFilteredEvents].sort((a, b) => new Date(a.date) - new Date(b.date)).map(e => {
       const s = data.scores[e.id]?.[chartPlayer];
       const score = (s !== undefined && s !== "absent" && s !== "") ? s : null;
       if (score !== null) cumulative += score;
       return { name: e.name || e.date, score, cumulative: score !== null ? cumulative : null };
     });
-  }, [chartPlayer, data]);
+  }, [chartPlayer, chartFilteredEvents, data.scores]);
 
   const addTeam = async () => { if (!newTeam.trim()) return; await persist({ ...data, teams: [...data.teams, { id: Date.now().toString(), name: newTeam.trim() }] }); setNewTeam(""); showToast("Team aggiunto!"); };
   const removeTeam = async (id) => { await persist({ ...data, teams: data.teams.filter(t => t.id !== id), players: data.players.filter(p => p.teamId !== id) }); showToast("Team rimosso", "err"); };
-  const addPlayer = async () => { if (!newPlayer.name.trim() || !newPlayer.teamId) return; await persist({ ...data, players: [...data.players, { id: Date.now().toString(), name: newPlayer.name.trim(), teamId: newPlayer.teamId }] }); setNewPlayer({ name: "", teamId: "" }); showToast("Player aggiunto!"); };
+  const addPlayer = async () => { if (!newPlayer.name.trim() || !newPlayer.teamId) return; await persist({ ...data, players: [...data.players, { id: Date.now().toString(), name: newPlayer.name.trim(), teamId: newPlayer.teamId, active: true }] }); setNewPlayer({ name: "", teamId: "" }); showToast("Player aggiunto!"); };
   const removePlayer = async (id) => { await persist({ ...data, players: data.players.filter(p => p.id !== id) }); showToast("Player rimosso", "err"); };
+  const togglePlayerActive = async (id) => {
+    const players = data.players.map(p => p.id === id ? { ...p, active: p.active === false ? true : false } : p);
+    await persist({ ...data, players });
+    showToast("Stato player aggiornato!");
+  };
   const addEvent = async () => {
     if (!newEventDate) return;
-    const ev = { id: Date.now().toString(), date: newEventDate, name: newEventName.trim() || `Evento ${data.events.length + 1}` };
+    const year = newEventDate.substring(0, 4);
+    const ev = { id: Date.now().toString(), date: newEventDate, name: newEventName.trim() || `Evento ${data.events.length + 1}`, year };
     await persist({ ...data, events: [...data.events, ev] });
     setNewEventName(""); showToast("Evento creato!");
   };
@@ -137,66 +190,88 @@ export default function App() {
 
   const importExcel = async (file) => {
     try {
+      // Estrai anno dal nome del file
+      const yearMatch = file.name.match(/\b(20\d{2})\b/);
+      const fileYear = yearMatch ? yearMatch[1] : null;
+
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
-      const updated = { ...data };
       const newTeams = [...data.teams];
       const newPlayers = [...data.players];
       const newScores = { ...data.scores };
       const newEvents = [...data.events];
+      let imported = { teams: 0, players: 0, events: 0, scores: 0 };
 
       wb.SheetNames.forEach(sheetName => {
         const ws = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
         if (rows.length < 2) return;
 
-        // Team
+        // Team dal nome del foglio
         let team = newTeams.find(t => t.name === sheetName);
         if (!team) {
-          team = { id: Date.now().toString() + Math.random(), name: sheetName };
+          team = { id: "t_" + Date.now() + Math.random().toString(36).slice(2), name: sheetName };
           newTeams.push(team);
+          imported.teams++;
         }
 
-        // Events from row 1 (skip col 0)
+        // Riga 0 = nomi eventi (dalla colonna 1 in poi)
         const eventNames = rows[0].slice(1);
-        const eventObjs = eventNames.map((eName, i) => {
+        const eventObjs = eventNames.map((eName) => {
           if (!eName) return null;
-          const name = String(eName).trim();
-          let ev = newEvents.find(e => e.name === name);
+          const raw = String(eName).trim();
+          if (!raw) return null;
+          // Prova a parsare come data DD/MM/YYYY o YYYY-MM-DD
+          let isoDate = null;
+          let eventYear = fileYear;
+          const ddmm = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+          const yyyymm = raw.match(/^(\d{4})[\/\-\.](\d{2})[\/\-\.](\d{2})$/);
+          if (ddmm) {
+            isoDate = `${ddmm[3]}-${ddmm[2].padStart(2,"0")}-${ddmm[1].padStart(2,"0")}`;
+            eventYear = ddmm[3];
+          } else if (yyyymm) {
+            isoDate = `${yyyymm[1]}-${yyyymm[2]}-${yyyymm[3]}`;
+            eventYear = yyyymm[1];
+          }
+          const name = isoDate ? raw : raw;
+          const fullName = isoDate ? raw : (fileYear ? `${name} (${fileYear})` : name);
+          let ev = newEvents.find(e => e.name === fullName);
           if (!ev) {
-            ev = { id: Date.now().toString() + Math.random() + i, name, date: name };
+            ev = { id: "e_" + Date.now() + Math.random().toString(36).slice(2), name: fullName, date: isoDate || (eventYear ? `${eventYear}-01-01` : "2024-01-01"), year: eventYear || "?" };
             newEvents.push(ev);
+            imported.events++;
           }
           return ev;
         });
 
-        // Players from col 0 (skip row 0)
+        // Righe dalla 1 in poi = player + punteggi
         rows.slice(1).forEach(row => {
           const playerName = String(row[0] || "").trim();
           if (!playerName) return;
           let player = newPlayers.find(p => p.name === playerName);
           if (!player) {
-            player = { id: Date.now().toString() + Math.random(), name: playerName, teamId: team.id };
+            player = { id: "p_" + Date.now() + Math.random().toString(36).slice(2), name: playerName, teamId: team.id, active: true };
             newPlayers.push(player);
+            imported.players++;
           }
-          // Scores
           row.slice(1).forEach((val, i) => {
             const ev = eventObjs[i];
             if (!ev) return;
             if (!newScores[ev.id]) newScores[ev.id] = {};
             const v = String(val).trim();
-            if (v === "-" || v === "" || v.toLowerCase() === "assente") {
+            if (v === "-" || v === "" || v.toLowerCase() === "assente" || v === "0") {
               newScores[ev.id][player.id] = "absent";
             } else {
               const num = parseInt(v.replace(/[^0-9]/g, ""));
-              if (!isNaN(num)) newScores[ev.id][player.id] = num;
+              if (!isNaN(num) && num > 0) { newScores[ev.id][player.id] = num; imported.scores++; }
+              else newScores[ev.id][player.id] = "absent";
             }
           });
         });
       });
 
-      await persist({ ...updated, teams: newTeams, players: newPlayers, events: newEvents, scores: newScores });
-      showToast("✅ Importazione completata!");
+      await persist({ ...data, teams: newTeams, players: newPlayers, events: newEvents, scores: newScores });
+      showToast(`✅ Importato! ${imported.players} player, ${imported.events} eventi, ${imported.scores} punteggi`);
     } catch (e) {
       console.error(e);
       showToast("❌ Errore durante l'importazione", "err");
@@ -212,11 +287,30 @@ export default function App() {
 
   const navItems = [
     { key: "players", label: "🏅 Classifica" },
+    { key: "hall", label: "🏆 Hall of Fame" },
     { key: "events", label: "📅 Eventi" },
     { key: "charts", label: "📈 Grafici" },
     ...(isAdmin ? [{ key: "admin", label: "⚙️ Gestisci" }] : []),
     { key: isAdmin ? "logout" : "login", label: isAdmin ? "🔓 Esci" : "🔐 Admin" },
   ];
+
+  const YearFilter = ({ value, onChange }) => (
+    availableYears.length > 0 ? (
+      <select className="inp" style={{ width: "auto", fontSize: 13 }} value={value} onChange={e => { onChange(e.target.value); setSelectedMonthFilter("all"); setChartMonth("all"); }}>
+        <option value="all">Tutti gli anni</option>
+        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+      </select>
+    ) : null
+  );
+
+  const MonthFilter = ({ yearValue, monthValue, onMonthChange }) => (
+    yearValue !== "all" && availableMonths.length > 1 ? (
+      <select className="inp" style={{ width: "auto", fontSize: 13 }} value={monthValue} onChange={e => onMonthChange(e.target.value)}>
+        <option value="all">Tutti i mesi</option>
+        {availableMonths.map(m => <option key={m} value={m}>{MONTHS[parseInt(m) - 1]}</option>)}
+      </select>
+    ) : null
+  );
 
   if (loading) return (
     <div style={{ background: "#0d0d12", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Barlow Condensed', Arial, sans-serif" }}>
@@ -240,6 +334,7 @@ export default function App() {
         .btn-r{background:#ef4444;color:#fff}.btn-r:hover{background:#f87171}
         .btn-g{background:#22c55e;color:#000}.btn-g:hover{background:#4ade80}
         .btn-ghost{background:#21212e;color:#aaa}.btn-ghost:hover{background:#2a2a38;color:#f0f0f0}
+        .btn-yellow{background:#eab308;color:#000}.btn-yellow:hover{background:#facc15}
         .inp{background:#1c1c28;border:1px solid #2e2e3e;color:#f0f0f0;font-size:14px;border-radius:8px;padding:10px 14px;width:100%;transition:border .15s}
         .inp:focus{border-color:#f97316}
         .nav-btn{background:none;border:none;color:#666;font-size:13px;font-weight:700;letter-spacing:.06em;cursor:pointer;padding:8px 12px;border-radius:6px;transition:all .15s;text-transform:uppercase}
@@ -247,7 +342,7 @@ export default function App() {
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         .tr:hover td{background:#1c1c28!important}
         .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase}
-        .toast{position:fixed;bottom:24px;right:24px;padding:12px 22px;border-radius:10px;font-weight:700;font-size:14px;z-index:9999;animation:up .3s ease}
+        .toast{position:fixed;bottom:80px;right:16px;padding:12px 22px;border-radius:10px;font-weight:700;font-size:14px;z-index:9999;animation:up .3s ease;max-width:300px}
         @keyframes up{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
         .score-inp{background:#1c1c28;border:1px solid #2e2e3e;color:#f0f0f0;font-size:16px;font-weight:700;border-radius:8px;padding:8px 10px;width:120px;text-align:center}
         .score-inp:focus{border-color:#f97316}
@@ -255,35 +350,35 @@ export default function App() {
         .absent-btn{background:#1c1c28;border:1px solid #2e2e3e;color:#666;font-size:11px;font-weight:700;border-radius:8px;padding:8px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em;transition:all .15s}
         .absent-btn.on{background:#3f1a1a;border-color:#ef4444;color:#ef4444}
         .absent-btn:hover{border-color:#ef4444;color:#ef4444}
+        .filter-btn{background:#1c1c28;border:1px solid #2e2e3e;color:#666;font-size:12px;font-weight:700;border-radius:20px;padding:6px 14px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em;transition:all .15s;font-family:inherit}
+        .filter-btn.on{background:#f97316;border-color:#f97316;color:#000}
       `}</style>
 
       {/* Header */}
       <div style={{ background: "#09090f", borderBottom: "2px solid #f97316", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(249,115,22,0.08) 0%, transparent 50%)", pointerEvents: "none" }} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, #f97316, #ef4444, #f97316)", backgroundSize: "200% 100%", animation: "shimmer 3s linear infinite" }} />
-        <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 70 }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", height: 70 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ position: "relative" }}>
-              <span style={{ fontSize: 32, filter: "drop-shadow(0 0 12px #f97316)" }}>⚔️</span>
-            </div>
+            <span style={{ fontSize: 32, filter: "drop-shadow(0 0 12px #f97316)" }}>⚔️</span>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#f97316", textTransform: "uppercase", letterSpacing: ".25em", marginBottom: 1, opacity: 0.8 }}>Italy</div>
               <div style={{ fontSize: 24, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em", lineHeight: 1, background: "linear-gradient(90deg, #22c55e 0%, #fff 50%, #ef4444 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 Raccolta Punteggi
               </div>
             </div>
-            {saving && <span style={{ color: "#f97316", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", opacity: 0.7 }}>💾 salvataggio...</span>}
+            {saving && <span style={{ color: "#f97316", fontSize: 11, fontWeight: 700, opacity: 0.7 }}>💾 salvataggio...</span>}
           </div>
         </div>
       </div>
 
-      {/* Bottom Nav Bar */}
+      {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#09090f", borderTop: "1px solid #1c1c28", zIndex: 100, display: "flex", justifyContent: "space-around", alignItems: "stretch", height: 64 }}>
         {navItems.map(n => (
           <button key={n.key} onClick={() => handleNav(n.key)}
             style={{ flex: 1, background: "none", border: "none", borderTop: page === n.key ? "2px solid #f97316" : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "6px 2px", color: page === n.key ? "#f97316" : "#555", transition: "all .15s", fontFamily: "inherit" }}>
-            <span style={{ fontSize: 20 }}>{n.label.split(" ")[0]}</span>
-            <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{n.label.split(" ").slice(1).join(" ")}</span>
+            <span style={{ fontSize: 18 }}>{n.label.split(" ")[0]}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>{n.label.split(" ").slice(1).join(" ")}</span>
           </button>
         ))}
       </div>
@@ -293,34 +388,45 @@ export default function App() {
         {/* CLASSIFICA */}
         {page === "players" && (
           <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-              <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>🏅 Classifica Player</h2>
-              {data.teams.length > 0 && (
-                <select className="inp" style={{ width: "auto", fontSize: 13 }} value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)}>
-                  <option value="all">Tutti i team</option>
-                  {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              )}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+              <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>🏅 Classifica</h2>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <YearFilter value={selectedYearFilter} onChange={setSelectedYearFilter} />
+                <MonthFilter yearValue={selectedYearFilter} monthValue={selectedMonthFilter} onMonthChange={setSelectedMonthFilter} />
+                {data.teams.length > 0 && (
+                  <select className="inp" style={{ width: "auto", fontSize: 13 }} value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)}>
+                    <option value="all">Tutti i team</option>
+                    {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {[["active","✅ Attivi"],["historic","📦 Storici"],["all","👥 Tutti"]].map(([val, label]) => (
+                <button key={val} className={`filter-btn${playerStatusFilter === val ? " on" : ""}`} onClick={() => setPlayerStatusFilter(val)}>{label}</button>
+              ))}
             </div>
             {sortedPlayers.length === 0
-              ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Nessun player. Vai in ⚙️ Gestisci per aggiungerne.</div>
+              ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Nessun player trovato.</div>
               : <div className="card" style={{ padding: 0, overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
-                        {["#","Player","Team","Presenze","Assenze","Miglior Score","Media","Totale"].map(h => (
+                        {["#","Player","Team","Presenze","Assenze","Best","Media","Totale"].map(h => (
                           <th key={h} style={{ padding: "12px 14px", textAlign: ["Player","Team"].includes(h) ? "left" : "center", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em", whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {sortedPlayers.map((p, i) => (
-                        <tr key={p.id} className="tr" style={{ borderBottom: "1px solid #1c1c28" }}>
+                        <tr key={p.id} className="tr" style={{ borderBottom: "1px solid #1c1c28", opacity: p.active === false ? 0.5 : 1 }}>
                           <td style={{ padding: "12px 14px", textAlign: "center", width: 36 }}>
                             {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : <span style={{ color: "#444", fontWeight: 700 }}>{i+1}</span>}
                           </td>
                           <td style={{ padding: "12px 14px", fontWeight: 700, fontSize: 15 }}>
-                            <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: playerColor(p.id), marginRight: 8 }}></span>{p.name}
+                            <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: playerColor(p.id), marginRight: 8 }}></span>
+                            {p.name}
+                            {p.active === false && <span style={{ marginLeft: 6, fontSize: 10, color: "#555", fontWeight: 400 }}>storico</span>}
                           </td>
                           <td style={{ padding: "12px 14px" }}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -342,10 +448,79 @@ export default function App() {
           </div>
         )}
 
+        {/* HALL OF FAME */}
+        {page === "hall" && (() => {
+          const allStats = [...playerStats].sort((a, b) => b.total - a.total);
+          const historic = allStats.filter(p => p.active === false);
+          const topScorer = [...playerStats].sort((a, b) => b.best - a.best)[0];
+          const topAvg = [...playerStats].filter(p => p.count >= 3).sort((a, b) => b.avg - a.avg)[0];
+          const mostPresent = [...playerStats].sort((a, b) => b.count - a.count)[0];
+          return (
+            <div>
+              <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 20 }}>🏆 Hall of Fame</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 28 }}>
+                {[
+                  { label: "🥇 Top Totale", p: allStats[0], val: fmtNum(allStats[0]?.total) + " pt" },
+                  { label: "⚡ Miglior Score", p: topScorer, val: fmtNum(topScorer?.best) },
+                  { label: "📊 Miglior Media", p: topAvg, val: fmtNum(topAvg?.avg) + " avg" },
+                  { label: "📅 Più Presente", p: mostPresent, val: mostPresent?.count + " eventi" },
+                ].map(({ label, p, val }) => p ? (
+                  <div key={label} className="card" style={{ textAlign: "center", padding: "18px 12px" }}>
+                    <div style={{ color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>{label}</div>
+                    <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>
+                      <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: playerColor(p.id), marginRight: 6 }}></span>
+                      {p.name}
+                    </div>
+                    <div style={{ color: "#f97316", fontWeight: 800, fontSize: 16 }}>{val}</div>
+                  </div>
+                ) : null)}
+              </div>
+              <h3 style={{ fontSize: 20, fontWeight: 800, textTransform: "uppercase", color: "#888", marginBottom: 14 }}>📦 Player Storici ({historic.length})</h3>
+              {historic.length === 0
+                ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 30 }}>Nessun player storico. Puoi marcare un player come storico nella sezione ⚙️ Gestisci.</div>
+                : <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
+                          {["#","Player","Team","Presenze","Best","Media","Totale"].map(h => (
+                            <th key={h} style={{ padding: "12px 14px", textAlign: ["Player","Team"].includes(h) ? "left" : "center", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historic.map((p, i) => (
+                          <tr key={p.id} className="tr" style={{ borderBottom: "1px solid #1c1c28", opacity: 0.7 }}>
+                            <td style={{ padding: "12px 14px", textAlign: "center", width: 36 }}>
+                              {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : <span style={{ color: "#444" }}>{i+1}</span>}
+                            </td>
+                            <td style={{ padding: "12px 14px", fontWeight: 700 }}>
+                              <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: playerColor(p.id), marginRight: 8 }}></span>{p.name}
+                            </td>
+                            <td style={{ padding: "12px 14px", color: "#888", fontSize: 13 }}>{p.teamName}</td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{p.count}</td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", color: "#eab308", fontWeight: 700 }}>{fmtNum(p.best)}</td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", color: "#aaa" }}>{fmtNum(p.avg)}</td>
+                            <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 800, fontSize: 18, color: "#f97316" }}>{fmtNum(p.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+              }
+            </div>
+          );
+        })()}
+
         {/* EVENTI */}
         {page === "events" && (
           <div>
-            <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 20 }}>📅 Eventi</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+              <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>📅 Eventi</h2>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <YearFilter value={selectedYearFilter} onChange={setSelectedYearFilter} />
+                <MonthFilter yearValue={selectedYearFilter} monthValue={selectedMonthFilter} onMonthChange={setSelectedMonthFilter} />
+              </div>
+            </div>
             {isAdmin && (
               <div className="card" style={{ marginBottom: 20 }}>
                 <p style={{ color: "#555", fontSize: 12, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 12 }}>Crea nuovo evento</p>
@@ -357,20 +532,20 @@ export default function App() {
               </div>
             )}
             {sortedEvents.length === 0
-              ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Nessun evento ancora.</div>
+              ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Nessun evento{selectedYearFilter !== "all" ? ` nel ${selectedYearFilter}` : ""}.</div>
               : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {sortedEvents.map(e => {
                     const scores = data.scores[e.id] || {};
                     const entries = Object.values(scores);
                     const played = entries.filter(v => v !== "absent").length;
                     const absent = entries.filter(v => v === "absent").length;
-                    const missing = data.players.length - played - absent;
+                    const missing = data.players.filter(p => p.active !== false).length - played - absent;
                     return (
                       <div key={e.id} className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", flexWrap: "wrap", gap: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                           <div>
                             <div style={{ fontWeight: 800, fontSize: 16 }}>{e.name}</div>
-                            <div style={{ color: "#555", fontSize: 12, marginTop: 2 }}>📅 {e.date}</div>
+                            <div style={{ color: "#555", fontSize: 12, marginTop: 2 }}>📅 {e.date} {e.year && <span className="badge" style={{ background: "#1c1c28", color: "#666", marginLeft: 4 }}>{e.year}</span>}</div>
                           </div>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                             <span className="badge" style={{ background: "#1c3a2a", color: "#22c55e" }}>✓ {played}</span>
@@ -450,8 +625,8 @@ export default function App() {
         {page === "entry" && isAdmin && (() => {
           const ev = data.events.find(e => e.id === activeEventId);
           if (!ev) return null;
-          const grouped = data.teams.map(t => ({ team: t, players: data.players.filter(p => p.teamId === t.id) })).filter(g => g.players.length > 0);
-          const noTeam = data.players.filter(p => !data.teams.find(t => t.id === p.teamId));
+          const grouped = data.teams.map(t => ({ team: t, players: data.players.filter(p => p.teamId === t.id && p.active !== false) })).filter(g => g.players.length > 0);
+          const noTeam = data.players.filter(p => !data.teams.find(t => t.id === p.teamId) && p.active !== false);
           const PlayerRow = ({ p }) => (
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: "1px solid #1c1c28" }}>
               <span style={{ minWidth: 170, fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 7 }}>
@@ -505,11 +680,17 @@ export default function App() {
         {/* GRAFICI */}
         {page === "charts" && (
           <div>
-            <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 20 }}>📈 Grafici</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+              <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>📈 Grafici</h2>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <YearFilter value={chartYear} onChange={setChartYear} />
+                <MonthFilter yearValue={chartYear} monthValue={chartMonth} onMonthChange={setChartMonth} />
+              </div>
+            </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
               {data.players.map(p => (
                 <button key={p.id} onClick={() => setChartPlayer(p.id)}
-                  style={{ background: chartPlayer === p.id ? playerColor(p.id) : "#1c1c28", border: `1px solid ${chartPlayer === p.id ? playerColor(p.id) : "#2e2e3e"}`, color: chartPlayer === p.id ? "#000" : "#aaa", fontFamily: "inherit", fontWeight: 700, fontSize: 13, padding: "7px 14px", borderRadius: 20, cursor: "pointer", transition: "all .15s" }}>
+                  style={{ background: chartPlayer === p.id ? playerColor(p.id) : "#1c1c28", border: `1px solid ${chartPlayer === p.id ? playerColor(p.id) : "#2e2e3e"}`, color: chartPlayer === p.id ? "#000" : "#aaa", fontFamily: "inherit", fontWeight: 700, fontSize: 13, padding: "7px 14px", borderRadius: 20, cursor: "pointer", transition: "all .15s", opacity: p.active === false ? 0.5 : 1 }}>
                   {p.name}
                 </button>
               ))}
@@ -523,8 +704,8 @@ export default function App() {
                   return (
                     <div>
                       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                        {[["Totale", fmtNum(stats?.total)], ["Media", fmtNum(stats?.avg)], ["Miglior Score", fmtNum(stats?.best)], ["Presenze", stats?.count], ["Assenze", stats?.absences]].map(([label, val]) => (
-                          <div key={label} className="card" style={{ flex: 1, minWidth: 100, textAlign: "center", padding: "14px 10px" }}>
+                        {[["Totale", fmtNum(stats?.total)], ["Media", fmtNum(stats?.avg)], ["Best", fmtNum(stats?.best)], ["Presenze", stats?.count], ["Assenze", stats?.absences]].map(([label, val]) => (
+                          <div key={label} className="card" style={{ flex: 1, minWidth: 90, textAlign: "center", padding: "14px 10px" }}>
                             <div style={{ color: "#555", fontSize: 11, textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 6 }}>{label}</div>
                             <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}</div>
                           </div>
@@ -564,72 +745,84 @@ export default function App() {
         {/* ADMIN */}
         {page === "admin" && isAdmin && (
           <div>
-          <div className="card" style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>📥 Importa da Excel / Google Sheets</div>
-              <div style={{ color: "#666", fontSize: 13 }}>Scarica il tuo Google Sheets come .xlsx e caricalo qui. Un foglio = un team, colonna A = player, riga 1 = eventi, "-" = assente.</div>
-            </div>
-            <label style={{ cursor: "pointer" }}>
-              <span className="btn btn-o" style={{ display: "inline-block" }}>📂 Carica file .xlsx</span>
-              <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importExcel(e.target.files[0]); e.target.value = ""; }} />
-            </label>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-            <div>
-              <h2 style={{ fontSize: 22, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 14 }}>⚙️ Team</h2>
-              <div className="card" style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <input className="inp" placeholder="Nome team" value={newTeam} onChange={e => setNewTeam(e.target.value)} onKeyDown={e => e.key === "Enter" && addTeam()} />
-                  <button className="btn btn-o" onClick={addTeam}>+</button>
-                </div>
+            {/* Import */}
+            <div className="card" style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>📥 Importa da Excel / Google Sheets</div>
+                <div style={{ color: "#666", fontSize: 13 }}>Scarica il tuo Google Sheets come .xlsx e caricalo. Un foglio = un team, colonna A = player, riga 1 = eventi, "-" = assente. L'anno viene letto dal nome del file (es. "Punteggi 2023.xlsx").</div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {data.teams.map((t, i) => (
-                  <div key={t.id} className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
-                    <span style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: COLORS[i % COLORS.length], display: "inline-block" }}></span>
-                      {t.name} <span style={{ color: "#444", fontSize: 12 }}>({data.players.filter(p => p.teamId === t.id).length} player)</span>
-                    </span>
-                    <button className="btn btn-r" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => removeTeam(t.id)}>✕</button>
+              <label style={{ cursor: "pointer" }}>
+                <span className="btn btn-o" style={{ display: "inline-block" }}>📂 Carica file .xlsx</span>
+                <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importExcel(e.target.files[0]); e.target.value = ""; }} />
+              </label>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+              {/* Team */}
+              <div>
+                <h2 style={{ fontSize: 22, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 14 }}>⚙️ Team</h2>
+                <div className="card" style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <input className="inp" placeholder="Nome team" value={newTeam} onChange={e => setNewTeam(e.target.value)} onKeyDown={e => e.key === "Enter" && addTeam()} />
+                    <button className="btn btn-o" onClick={addTeam}>+</button>
                   </div>
-                ))}
-                {data.teams.length === 0 && <div style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun team</div>}
-              </div>
-            </div>
-            <div>
-              <h2 style={{ fontSize: 22, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 14 }}>⚙️ Player</h2>
-              <div className="card" style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <input className="inp" placeholder="Nome player" value={newPlayer.name} onChange={e => setNewPlayer({ ...newPlayer, name: e.target.value })} />
-                  <select className="inp" value={newPlayer.teamId} onChange={e => setNewPlayer({ ...newPlayer, teamId: e.target.value })}>
-                    <option value="">Seleziona team</option>
-                    {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                  <button className="btn btn-o" onClick={addPlayer}>Aggiungi Player</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {data.teams.map((t, i) => (
+                    <div key={t.id} className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
+                      <span style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
+                        <span style={{ width: 9, height: 9, borderRadius: "50%", background: COLORS[i % COLORS.length], display: "inline-block" }}></span>
+                        {t.name} <span style={{ color: "#444", fontSize: 12 }}>({data.players.filter(p => p.teamId === t.id).length})</span>
+                      </span>
+                      <button className="btn btn-r" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => removeTeam(t.id)}>✕</button>
+                    </div>
+                  ))}
+                  {data.teams.length === 0 && <div style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun team</div>}
                 </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
-                {data.players.map(p => {
-                  const ti = data.teams.findIndex(t => t.id === p.teamId);
-                  const team = data.teams.find(t => t.id === p.teamId);
-                  return (
-                    <div key={p.id} className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: playerColor(p.id), display: "inline-block" }}></span>
-                        <span style={{ fontWeight: 700 }}>{p.name}</span>
-                        {team && <span style={{ color: "#555", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS[ti % COLORS.length], display: "inline-block" }}></span>
-                          {team.name}
-                        </span>}
-                      </span>
-                      <button className="btn btn-r" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => removePlayer(p.id)}>✕</button>
-                    </div>
-                  );
-                })}
-                {data.players.length === 0 && <div style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player</div>}
+
+              {/* Player */}
+              <div>
+                <h2 style={{ fontSize: 22, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 14 }}>⚙️ Player</h2>
+                <div className="card" style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input className="inp" placeholder="Nome player" value={newPlayer.name} onChange={e => setNewPlayer({ ...newPlayer, name: e.target.value })} />
+                    <select className="inp" value={newPlayer.teamId} onChange={e => setNewPlayer({ ...newPlayer, teamId: e.target.value })}>
+                      <option value="">Seleziona team</option>
+                      {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    <button className="btn btn-o" onClick={addPlayer}>Aggiungi Player</button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+                  {data.players.map(p => {
+                    const ti = data.teams.findIndex(t => t.id === p.teamId);
+                    const team = data.teams.find(t => t.id === p.teamId);
+                    const isActive = p.active !== false;
+                    return (
+                      <div key={p.id} className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", opacity: isActive ? 1 : 0.6 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: playerColor(p.id), display: "inline-block" }}></span>
+                          <span style={{ fontWeight: 700 }}>{p.name}</span>
+                          {!isActive && <span style={{ fontSize: 10, color: "#555" }}>storico</span>}
+                          {team && <span style={{ color: "#555", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS[ti % COLORS.length], display: "inline-block" }}></span>
+                            {team.name}
+                          </span>}
+                        </span>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button className={`btn ${isActive ? "btn-yellow" : "btn-g"}`} style={{ padding: "4px 8px", fontSize: 10 }} onClick={() => togglePlayerActive(p.id)}>
+                            {isActive ? "📦 Storico" : "✅ Attivo"}
+                          </button>
+                          <button className="btn btn-r" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => removePlayer(p.id)}>✕</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {data.players.length === 0 && <div style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player</div>}
+                </div>
               </div>
             </div>
-          </div>
           </div>
         )}
 

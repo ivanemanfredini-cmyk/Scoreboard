@@ -47,6 +47,7 @@ export default function App() {
   const [chartYear, setChartYear] = useState("all");
   const [selectedMonthFilter, setSelectedMonthFilter] = useState("all");
   const [chartMonth, setChartMonth] = useState("all");
+  const [confirmReset, setConfirmReset] = useState(null); // null | "all" | year
 
   useEffect(() => {
     const unsub = onSnapshot(DATA_DOC, (snap) => {
@@ -235,7 +236,10 @@ export default function App() {
           }
           const name = isoDate ? raw : raw;
           const fullName = isoDate ? raw : (fileYear ? `${name} (${fileYear})` : name);
-          let ev = newEvents.find(e => e.name === fullName);
+          // Dedup: cerca per data ISO o per nome
+          let ev = isoDate
+            ? newEvents.find(e => e.date === isoDate)
+            : newEvents.find(e => e.name === fullName);
           if (!ev) {
             ev = { id: "e_" + Date.now() + Math.random().toString(36).slice(2), name: fullName, date: isoDate || (eventYear ? `${eventYear}-01-01` : "2024-01-01"), year: eventYear || "?" };
             newEvents.push(ev);
@@ -276,6 +280,23 @@ export default function App() {
       console.error(e);
       showToast("❌ Errore durante l'importazione", "err");
     }
+  };
+
+  const resetAll = async () => {
+    await persist(emptyData);
+    setConfirmReset(null);
+    showToast("Tutti i dati cancellati", "err");
+  };
+
+  const resetYear = async (year) => {
+    const eventsToRemove = new Set(data.events.filter(e => (e.year || e.date?.substring(0,4)) === year).map(e => e.id));
+    const newScores = { ...data.scores };
+    eventsToRemove.forEach(id => delete newScores[id]);
+    const newEvents = data.events.filter(e => !eventsToRemove.has(e.id));
+    // rimuovi player che non hanno punteggi in altri eventi
+    await persist({ ...data, events: newEvents, scores: newScores });
+    setConfirmReset(null);
+    showToast(`Dati ${year} cancellati`, "err");
   };
 
   const teamColor = (id) => COLORS[data.teams.findIndex(t => t.id === id) % COLORS.length] || "#888";
@@ -745,6 +766,29 @@ export default function App() {
         {/* ADMIN */}
         {page === "admin" && isAdmin && (
           <div>
+            {/* Confirm dialog */}
+            {confirmReset && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                <div className="card" style={{ maxWidth: 380, width: "100%", textAlign: "center" }}>
+                  <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+                  <h3 style={{ fontWeight: 800, fontSize: 18, marginBottom: 8 }}>
+                    {confirmReset === "all" ? "Cancella TUTTI i dati?" : `Cancella tutti i dati del ${confirmReset}?`}
+                  </h3>
+                  <p style={{ color: "#666", fontSize: 13, marginBottom: 20 }}>
+                    {confirmReset === "all"
+                      ? "Verranno eliminati tutti i team, player, eventi e punteggi. Operazione irreversibile!"
+                      : `Verranno eliminati tutti gli eventi e punteggi del ${confirmReset}. Team e player restano.`}
+                  </p>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                    <button className="btn btn-ghost" onClick={() => setConfirmReset(null)}>Annulla</button>
+                    <button className="btn btn-r" onClick={() => confirmReset === "all" ? resetAll() : resetYear(confirmReset)}>
+                      Sì, cancella
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Import */}
             <div className="card" style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div>
@@ -755,6 +799,19 @@ export default function App() {
                 <span className="btn btn-o" style={{ display: "inline-block" }}>📂 Carica file .xlsx</span>
                 <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importExcel(e.target.files[0]); e.target.value = ""; }} />
               </label>
+            </div>
+
+            {/* Reset */}
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 12 }}>🗑️ Cancella Dati</div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn btn-r" onClick={() => setConfirmReset("all")}>Svuota tutto</button>
+                {availableYears.map(y => (
+                  <button key={y} className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setConfirmReset(y)}>
+                    🗑 Cancella {y}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>

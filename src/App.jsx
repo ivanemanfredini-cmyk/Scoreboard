@@ -276,12 +276,12 @@ export default function App() {
             const v = String(val).trim();
             if (v === "-" || v.toLowerCase() === "assente") {
               newScores[ev.id][player.id] = "absent";
-            } else {
+            } else if (v !== "" && v !== "0") {
               // Gestisce virgola decimale italiana (53348,8 -> 53349)
               const normalized = v.replace(",", ".").replace(/[^0-9.]/g, "");
               const num = Math.round(parseFloat(normalized));
               if (!isNaN(num) && num > 0) { newScores[ev.id][player.id] = num; imported.scores++; }
-              else newScores[ev.id][player.id] = "absent";
+              // celle vuote o zero: non registriamo nulla
             }
           });
         });

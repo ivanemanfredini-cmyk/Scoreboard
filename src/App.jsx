@@ -277,7 +277,9 @@ export default function App() {
             if (v === "-" || v === "" || v.toLowerCase() === "assente" || v === "0") {
               newScores[ev.id][player.id] = "absent";
             } else {
-              const num = parseInt(v.replace(/[^0-9]/g, ""));
+              // Gestisce virgola decimale italiana (53348,8 -> 53349)
+              const normalized = v.replace(",", ".").replace(/[^0-9.]/g, "");
+              const num = Math.round(parseFloat(normalized));
               if (!isNaN(num) && num > 0) { newScores[ev.id][player.id] = num; imported.scores++; }
               else newScores[ev.id][player.id] = "absent";
             }

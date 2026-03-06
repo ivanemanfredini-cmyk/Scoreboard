@@ -205,13 +205,21 @@ export default function App() {
             </div>
             {saving && <span style={{ color: "#f97316", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", opacity: 0.7 }}>💾 salvataggio...</span>}
           </div>
-          <nav style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-            {navItems.map(n => <button key={n.key} className={`nav-btn${page === n.key ? " active" : ""}`} onClick={() => handleNav(n.key)}>{n.label}</button>)}
-          </nav>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "28px 16px" }}>
+      {/* Bottom Nav Bar */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#09090f", borderTop: "1px solid #1c1c28", zIndex: 100, display: "flex", justifyContent: "space-around", alignItems: "stretch", height: 64 }}>
+        {navItems.map(n => (
+          <button key={n.key} onClick={() => handleNav(n.key)}
+            style={{ flex: 1, background: "none", border: "none", borderTop: page === n.key ? "2px solid #f97316" : "2px solid transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "6px 2px", color: page === n.key ? "#f97316" : "#555", transition: "all .15s", fontFamily: "inherit" }}>
+            <span style={{ fontSize: 20 }}>{n.label.split(" ")[0]}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{n.label.split(" ").slice(1).join(" ")}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "28px 16px 80px 16px" }}>
 
         {/* CLASSIFICA */}
         {page === "players" && (

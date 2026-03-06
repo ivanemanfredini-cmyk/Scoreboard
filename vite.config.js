@@ -1,4 +1,3 @@
-Perfetto! Incolla questo testo:
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 

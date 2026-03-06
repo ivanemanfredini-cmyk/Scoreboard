@@ -390,7 +390,9 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         input,select,button{font-family:inherit;outline:none}
-        .card{background:#15151e;border:1px solid #21212e;border-radius:12px;padding:20px}
+        .card{background:#15151e;border:1px solid #21212e;border-radius:12px;padding:20px;position:relative;overflow:hidden}
+        .card::before{content:'';position:absolute;inset:0;background:url('/logo.png') center/contain no-repeat;opacity:0.03;pointer-events:none;z-index:0}
+        .card>*{position:relative;z-index:1}
         .btn{font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:none;border-radius:8px;cursor:pointer;padding:10px 20px;font-size:13px;transition:all .15s}
         .btn-o{background:#f97316;color:#000}.btn-o:hover{background:#fb923c}
         .btn-r{background:#ef4444;color:#fff}.btn-r:hover{background:#f87171}
@@ -417,19 +419,16 @@ export default function App() {
       `}</style>
 
       {/* Header */}
-      <div style={{ background: "#09090f", borderBottom: "2px solid #f97316", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(249,115,22,0.08) 0%, transparent 50%)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, #f97316, #ef4444, #f97316)", backgroundSize: "200% 100%", animation: "shimmer 3s linear infinite" }} />
-        <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", height: 70 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <span style={{ fontSize: 32, filter: "drop-shadow(0 0 12px #f97316)" }}>⚔️</span>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#f97316", textTransform: "uppercase", letterSpacing: ".25em", marginBottom: 1, opacity: 0.8 }}>Italy</div>
-              <div style={{ fontSize: 24, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em", lineHeight: 1, background: "linear-gradient(90deg, #22c55e 0%, #fff 50%, #ef4444 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                Raccolta Punteggi
-              </div>
+      <div style={{ background: "#09090f", borderBottom: "2px solid #c9a84c", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(201,168,76,0.10) 0%, transparent 60%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, #22c55e, #fff, #ef4444)", backgroundSize: "200% 100%", animation: "shimmer 3s linear infinite" }} />
+        <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <img src="/logo.png" alt="Italy" style={{ height: 58, width: 58, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(201,168,76,0.6))" }} />
+            <div style={{ fontSize: 38, fontWeight: 900, textTransform: "uppercase", letterSpacing: ".10em", lineHeight: 1, background: "linear-gradient(90deg, #22c55e 0%, #fff 50%, #ef4444 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontFamily: "'Barlow Condensed', Arial, sans-serif" }}>
+              ITALY
             </div>
-            {saving && <span style={{ color: "#f97316", fontSize: 11, fontWeight: 700, opacity: 0.7 }}>💾 salvataggio...</span>}
+            {saving && <span style={{ color: "#c9a84c", fontSize: 11, fontWeight: 700, opacity: 0.7, marginLeft: 8 }}>💾 salvataggio...</span>}
           </div>
         </div>
       </div>

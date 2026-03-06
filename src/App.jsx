@@ -391,7 +391,7 @@ export default function App() {
         *{box-sizing:border-box;margin:0;padding:0}
         input,select,button{font-family:inherit;outline:none}
         .card{background:#15151e;border:1px solid #21212e;border-radius:12px;padding:20px;position:relative;overflow:hidden}
-        .card::before{content:'';position:absolute;inset:0;background:url('/logo.png') center/contain no-repeat;opacity:0.03;pointer-events:none;z-index:0}
+        .card::before{content:'';position:absolute;inset:0;background:url('/logo2.jpg') center/contain no-repeat;opacity:0.03;pointer-events:none;z-index:0}
         .card>*{position:relative;z-index:1}
         .btn{font-weight:700;text-transform:uppercase;letter-spacing:.06em;border:none;border-radius:8px;cursor:pointer;padding:10px 20px;font-size:13px;transition:all .15s}
         .btn-o{background:#f97316;color:#000}.btn-o:hover{background:#fb923c}
@@ -424,7 +424,7 @@ export default function App() {
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, #22c55e, #fff, #ef4444)", backgroundSize: "200% 100%", animation: "shimmer 3s linear infinite" }} />
         <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/logo.png" alt="Italy" style={{ height: 58, width: 58, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(201,168,76,0.6))" }} />
+            <img src="/logo2.jpg" alt="Italy" style={{ height: 58, width: 58, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(201,168,76,0.6))" }} />
             <div style={{ fontSize: 38, fontWeight: 900, textTransform: "uppercase", letterSpacing: ".10em", lineHeight: 1, background: "linear-gradient(90deg, #22c55e 0%, #fff 50%, #ef4444 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontFamily: "'Barlow Condensed', Arial, sans-serif" }}>
               ITALY
             </div>

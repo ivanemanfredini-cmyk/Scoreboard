@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
@@ -132,6 +133,74 @@ export default function App() {
     scores[activeEventId] = entry;
     await persist({ ...data, scores });
     showToast("Punteggi salvati!"); setPage("events");
+  };
+
+  const importExcel = async (file) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const updated = { ...data };
+      const newTeams = [...data.teams];
+      const newPlayers = [...data.players];
+      const newScores = { ...data.scores };
+      const newEvents = [...data.events];
+
+      wb.SheetNames.forEach(sheetName => {
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+        if (rows.length < 2) return;
+
+        // Team
+        let team = newTeams.find(t => t.name === sheetName);
+        if (!team) {
+          team = { id: Date.now().toString() + Math.random(), name: sheetName };
+          newTeams.push(team);
+        }
+
+        // Events from row 1 (skip col 0)
+        const eventNames = rows[0].slice(1);
+        const eventObjs = eventNames.map((eName, i) => {
+          if (!eName) return null;
+          const name = String(eName).trim();
+          let ev = newEvents.find(e => e.name === name);
+          if (!ev) {
+            ev = { id: Date.now().toString() + Math.random() + i, name, date: name };
+            newEvents.push(ev);
+          }
+          return ev;
+        });
+
+        // Players from col 0 (skip row 0)
+        rows.slice(1).forEach(row => {
+          const playerName = String(row[0] || "").trim();
+          if (!playerName) return;
+          let player = newPlayers.find(p => p.name === playerName);
+          if (!player) {
+            player = { id: Date.now().toString() + Math.random(), name: playerName, teamId: team.id };
+            newPlayers.push(player);
+          }
+          // Scores
+          row.slice(1).forEach((val, i) => {
+            const ev = eventObjs[i];
+            if (!ev) return;
+            if (!newScores[ev.id]) newScores[ev.id] = {};
+            const v = String(val).trim();
+            if (v === "-" || v === "" || v.toLowerCase() === "assente") {
+              newScores[ev.id][player.id] = "absent";
+            } else {
+              const num = parseInt(v.replace(/[^0-9]/g, ""));
+              if (!isNaN(num)) newScores[ev.id][player.id] = num;
+            }
+          });
+        });
+      });
+
+      await persist({ ...updated, teams: newTeams, players: newPlayers, events: newEvents, scores: newScores });
+      showToast("✅ Importazione completata!");
+    } catch (e) {
+      console.error(e);
+      showToast("❌ Errore durante l'importazione", "err");
+    }
   };
 
   const teamColor = (id) => COLORS[data.teams.findIndex(t => t.id === id) % COLORS.length] || "#888";
@@ -494,6 +563,17 @@ export default function App() {
 
         {/* ADMIN */}
         {page === "admin" && isAdmin && (
+          <div>
+          <div className="card" style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>📥 Importa da Excel / Google Sheets</div>
+              <div style={{ color: "#666", fontSize: 13 }}>Scarica il tuo Google Sheets come .xlsx e caricalo qui. Un foglio = un team, colonna A = player, riga 1 = eventi, "-" = assente.</div>
+            </div>
+            <label style={{ cursor: "pointer" }}>
+              <span className="btn btn-o" style={{ display: "inline-block" }}>📂 Carica file .xlsx</span>
+              <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importExcel(e.target.files[0]); e.target.value = ""; }} />
+            </label>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
             <div>
               <h2 style={{ fontSize: 22, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 14 }}>⚙️ Team</h2>
@@ -549,6 +629,7 @@ export default function App() {
                 {data.players.length === 0 && <div style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player</div>}
               </div>
             </div>
+          </div>
           </div>
         )}
 

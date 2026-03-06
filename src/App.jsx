@@ -49,11 +49,7 @@ export default function App() {
   const [selectedMonthFilter, setSelectedMonthFilter] = useState("all");
   const [chartMonth, setChartMonth] = useState("all");
   const [confirmReset, setConfirmReset] = useState(null); // null | "all" | year
-  const [screenPage, setScreenPage] = useState(null); // eventId when in screenshot import mode
-  const [screenImages, setScreenImages] = useState([]); // [{file, preview}]
-  const [screenResults, setScreenResults] = useState([]); // [{name, score, matched: player|null}]
-  const [screenLoading, setScreenLoading] = useState(false);
-  const [screenError, setScreenError] = useState(null);
+
 
   useEffect(() => {
     const unsub = onSnapshot(DATA_DOC, (snap) => {
@@ -325,84 +321,6 @@ export default function App() {
       console.error(e);
       showToast("❌ Errore durante l'importazione", "err");
     }
-  };
-
-  const fileToBase64 = (file) => new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(",")[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-
-  const extractFromScreenshots = async () => {
-    setScreenLoading(true);
-    setScreenError(null);
-    try {
-      const allResults = [];
-      for (const img of screenImages) {
-        const b64 = await fileToBase64(img.file);
-        const mediaType = img.file.type || "image/jpeg";
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 1000,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: b64 } },
-                { type: "text", text: `Guarda questa schermata di un gioco di corse. Estrai SOLO i player con lo sfondo della riga GIALLO/DORATO (non blu, non bianco). Per ogni riga gialla restituisci nome e punteggio numerico. Rispondi SOLO con JSON array, nessun testo aggiuntivo, nessun backtick. Formato: [{"name":"NomePlayer","score":12345}, ...]. Se non ci sono righe gialle rispondi [].` }
-              ]
-            }]
-          })
-        });
-        const data = await response.json();
-        const text = data.content?.map(c => c.text || "").join("") || "[]";
-        const clean = text.replace(/```json|```/g, "").trim();
-        try {
-          const parsed = JSON.parse(clean);
-          parsed.forEach(r => {
-            if (r.name && r.score) {
-              // dedup per nome
-              if (!allResults.find(x => x.name.toLowerCase() === r.name.toLowerCase())) {
-                allResults.push({ name: r.name, score: Math.round(Number(r.score)), matched: null });
-              }
-            }
-          });
-        } catch {}
-      }
-      // Prova a matchare con player esistenti
-      const withMatch = allResults.map(r => {
-        const match = data.players.find(p =>
-          p.name.toLowerCase() === r.name.toLowerCase() ||
-          p.name.toLowerCase().includes(r.name.toLowerCase()) ||
-          r.name.toLowerCase().includes(p.name.toLowerCase())
-        );
-        return { ...r, matched: match || null, selectedPlayerId: match?.id || "__new__" };
-      });
-      setScreenResults(withMatch);
-    } catch (e) {
-      setScreenError("Errore durante l'estrazione: " + e.message);
-    }
-    setScreenLoading(false);
-  };
-
-  const saveScreenScores = async () => {
-    const scores = { ...data.scores };
-    if (!scores[screenPage]) scores[screenPage] = {};
-    screenResults.forEach(r => {
-      const pid = r.selectedPlayerId;
-      if (pid && pid !== "__new__" && pid !== "__skip__") {
-        scores[screenPage][pid] = r.score;
-      }
-    });
-    await persist({ ...data, scores });
-    showToast(`✅ ${screenResults.filter(r => r.selectedPlayerId && r.selectedPlayerId !== "__new__" && r.selectedPlayerId !== "__skip__").length} punteggi salvati!`);
-    setScreenPage(null);
-    setScreenImages([]);
-    setScreenResults([]);
-    setPage("events");
   };
 
   const resetAll = async () => {
@@ -714,7 +632,7 @@ export default function App() {
                         </div>
                         <div style={{ display: "flex", gap: 8 }}>
                           {isAdmin && <button className="btn btn-o" style={{ fontSize: 12, padding: "8px 14px" }} onClick={() => openScoreEntry(e.id)}>✏️ Punteggi</button>}
-                          {isAdmin && <button className="btn btn-ghost" style={{ fontSize: 12, padding: "8px 14px" }} onClick={() => { setScreenPage(e.id); setScreenImages([]); setScreenResults([]); setPage("screenshot"); }}>📸 Screenshot</button>}
+
                           <button className="btn btn-ghost" style={{ fontSize: 12, padding: "8px 14px" }} onClick={() => { setActiveEventId(e.id); setPage("event-detail"); }}>👁 Dettaglio</button>
                           {isAdmin && <button className="btn btn-r" style={{ fontSize: 12, padding: "8px 10px" }} onClick={() => removeEvent(e.id)}>✕</button>}
                         </div>
@@ -1059,86 +977,6 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* SCREENSHOT IMPORT */}
-        {page === "screenshot" && isAdmin && (() => {
-          const ev = data.events.find(e => e.id === screenPage);
-          if (!ev) return null;
-          return (
-            <div>
-              <button className="btn btn-ghost" style={{ marginBottom: 20, fontSize: 12 }} onClick={() => { setScreenPage(null); setScreenImages([]); setScreenResults([]); setPage("events"); }}>← Annulla</button>
-              <h2 style={{ fontSize: 24, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 4 }}>📸 Importa da Screenshot</h2>
-              <p style={{ color: "#555", fontSize: 13, marginBottom: 20 }}>📅 {ev.name} — {ev.date}</p>
-
-              {screenResults.length === 0 && (
-                <div className="card" style={{ marginBottom: 20 }}>
-                  <p style={{ color: "#aaa", fontWeight: 700, marginBottom: 12 }}>1. Carica gli screenshot dell'evento (anche più file insieme)</p>
-                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    <label style={{ cursor: "pointer" }}>
-                      <span className="btn btn-ghost" style={{ display: "inline-block" }}>📂 Seleziona immagini</span>
-                      <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => {
-                        const files = Array.from(e.target.files).map(f => ({ file: f, preview: URL.createObjectURL(f) }));
-                        setScreenImages(prev => [...prev, ...files]);
-                        e.target.value = "";
-                      }} />
-                    </label>
-                    {screenImages.length > 0 && (
-                      <span style={{ color: "#22c55e", fontWeight: 700, fontSize: 13 }}>✓ {screenImages.length} immagini caricate</span>
-                    )}
-                  </div>
-                  {screenImages.length > 0 && (
-                    <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                      {screenImages.map((img, i) => (
-                        <div key={i} style={{ position: "relative" }}>
-                          <img src={img.preview} style={{ width: 80, height: 60, objectFit: "cover", borderRadius: 6, border: "1px solid #2e2e3e" }} />
-                          <button onClick={() => setScreenImages(prev => prev.filter((_, j) => j !== i))}
-                            style={{ position: "absolute", top: -6, right: -6, background: "#ef4444", border: "none", borderRadius: "50%", width: 18, height: 18, color: "#fff", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {screenImages.length > 0 && (
-                    <button className="btn btn-o" style={{ marginTop: 16, width: "100%" }} onClick={extractFromScreenshots} disabled={screenLoading}>
-                      {screenLoading ? "⏳ Analisi in corso..." : "🔍 Estrai punteggi con AI"}
-                    </button>
-                  )}
-                  {screenError && <p style={{ color: "#ef4444", marginTop: 10, fontSize: 13 }}>{screenError}</p>}
-                </div>
-              )}
-
-              {screenResults.length > 0 && (
-                <div>
-                  <div className="card" style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-                      <p style={{ color: "#aaa", fontWeight: 700 }}>2. Verifica e correggi i dati estratti</p>
-                      <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => { setScreenResults([]); }}>← Ricarica immagini</button>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {screenResults.map((r, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #1c1c28", flexWrap: "wrap" }}>
-                          <div style={{ minWidth: 110, fontWeight: 700, color: "#f97316", fontSize: 14 }}>{r.name}</div>
-                          <input type="number" className="score-inp" style={{ width: 120 }} value={r.score}
-                            onChange={e => setScreenResults(prev => prev.map((x, j) => j === i ? { ...x, score: parseInt(e.target.value) || 0 } : x))} />
-                          <select className="inp" style={{ flex: 1, minWidth: 160, fontSize: 13 }}
-                            value={r.selectedPlayerId || "__new__"}
-                            onChange={e => setScreenResults(prev => prev.map((x, j) => j === i ? { ...x, selectedPlayerId: e.target.value } : x))}>
-                            <option value="__skip__">— Ignora —</option>
-                            {data.players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                          <button onClick={() => setScreenResults(prev => prev.filter((_, j) => j !== i))}
-                            style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 18, fontWeight: 700 }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button className="btn btn-g" style={{ width: "100%", padding: 14 }} onClick={saveScreenScores}>
-                    💾 Salva {screenResults.filter(r => r.selectedPlayerId && r.selectedPlayerId !== "__skip__").length} punteggi
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })()}
 
         {/* LOGIN */}}
         {page === "login" && (

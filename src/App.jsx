@@ -222,20 +222,31 @@ export default function App() {
           if (!eName) return null;
           const raw = String(eName).trim();
           if (!raw) return null;
-          // Prova a parsare come data DD/MM/YYYY o YYYY-MM-DD
+          // Converti data Excel (numero seriale) o stringa DD/MM/YYYY o YYYY-MM-DD
           let isoDate = null;
           let eventYear = fileYear;
-          const ddmm = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
-          const yyyymm = raw.match(/^(\d{4})[\/\-\.](\d{2})[\/\-\.](\d{2})$/);
-          if (ddmm) {
-            isoDate = `${ddmm[3]}-${ddmm[2].padStart(2,"0")}-${ddmm[1].padStart(2,"0")}`;
-            eventYear = ddmm[3];
-          } else if (yyyymm) {
-            isoDate = `${yyyymm[1]}-${yyyymm[2]}-${yyyymm[3]}`;
-            eventYear = yyyymm[1];
+          const num = Number(raw);
+          if (!isNaN(num) && num > 40000 && num < 60000) {
+            // Numero seriale Excel: 1 = 1 gennaio 1900
+            const excelEpoch = new Date(1899, 11, 30);
+            const d = new Date(excelEpoch.getTime() + num * 86400000);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            isoDate = `${yyyy}-${mm}-${dd}`;
+            eventYear = String(yyyy);
+          } else {
+            const ddmm = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+            const yyyymm = raw.match(/^(\d{4})[\/\-\.](\d{2})[\/\-\.](\d{2})$/);
+            if (ddmm) {
+              isoDate = `${ddmm[3]}-${ddmm[2].padStart(2,"0")}-${ddmm[1].padStart(2,"0")}`;
+              eventYear = ddmm[3];
+            } else if (yyyymm) {
+              isoDate = `${yyyymm[1]}-${yyyymm[2]}-${yyyymm[3]}`;
+              eventYear = yyyymm[1];
+            }
           }
-          const name = isoDate ? raw : raw;
-          const fullName = isoDate ? raw : (fileYear ? `${name} (${fileYear})` : name);
+          const fullName = isoDate ? isoDate : (fileYear ? `${raw} (${fileYear})` : raw);
           // Dedup: cerca per data ISO o per nome
           let ev = isoDate
             ? newEvents.find(e => e.date === isoDate)

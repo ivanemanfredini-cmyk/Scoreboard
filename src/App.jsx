@@ -274,7 +274,7 @@ export default function App() {
             if (!ev) return;
             if (!newScores[ev.id]) newScores[ev.id] = {};
             const v = String(val).trim();
-            if (v === "-" || v === "" || v.toLowerCase() === "assente" || v === "0") {
+            if (v === "-" || v.toLowerCase() === "assente") {
               newScores[ev.id][player.id] = "absent";
             } else {
               // Gestisce virgola decimale italiana (53348,8 -> 53349)

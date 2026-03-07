@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc, writeBatch } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC2o4K_UQwhdj375y6a4M8il3Rj-S_5270",
@@ -69,15 +69,22 @@ export default function App() {
   const persist = async (updated) => {
     setSaving(true);
     try {
-      // Salva in 3 documenti separati per evitare limite 1MB Firestore
-      const batch1 = { teams: updated.teams, players: updated.players };
-      const batch2 = { events: updated.events };
-      const batch3 = { scores: updated.scores };
+      // Meta (teams + players) e events in doc separati
       await Promise.all([
-        setDoc(doc(db, "data", "meta"), batch1),
-        setDoc(doc(db, "data", "events"), batch2),
-        setDoc(doc(db, "data", "scores"), batch3),
+        setDoc(META_DOC, { teams: updated.teams, players: updated.players }),
+        setDoc(EVENTS_DOC, { list: updated.events }),
       ]);
+      // Scores: un documento per evento nella collection "scores"
+      const currentScoreIds = new Set(Object.keys(updated.scores));
+      const existingSnap = await getDocs(SCORES_COL);
+      const batch = writeBatch(db);
+      // Cancella documenti di eventi rimossi
+      existingSnap.forEach(d => { if (!currentScoreIds.has(d.id)) batch.delete(d.ref); });
+      // Salva/aggiorna ogni evento
+      currentScoreIds.forEach(evId => {
+        batch.set(doc(db, "scores", evId), { players: updated.scores[evId] || {} });
+      });
+      await batch.commit();
       setData(updated);
     }
     catch(e) {
@@ -422,7 +429,16 @@ export default function App() {
   };
 
   const resetAll = async () => {
-    await persist(emptyData);
+    // Cancella tutti i documenti scores
+    const snap = await getDocs(SCORES_COL);
+    const batch = writeBatch(db);
+    snap.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    await Promise.all([
+      setDoc(META_DOC, { teams: [], players: [] }),
+      setDoc(EVENTS_DOC, { list: [] }),
+    ]);
+    setData(emptyData);
     setConfirmReset(null);
     showToast("Tutti i dati cancellati", "err");
   };

@@ -1469,7 +1469,6 @@ export default function App() {
       </div>
 
       {toast && <div className="toast" style={{ background: toast.type === "err" ? "#ef4444" : "#22c55e", color: "#fff" }}>{toast.msg}</div>}
-      </div>
     </div>
   );
 }

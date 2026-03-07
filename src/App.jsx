@@ -569,7 +569,7 @@ export default function App() {
           </div>
         )}
 
-        {/* CLASSIFICA */}}
+        {/* CLASSIFICA */}
         {page === "players" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>

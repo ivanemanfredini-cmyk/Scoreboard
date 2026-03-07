@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch } from "firebase/firestore";
+import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC2o4K_UQwhdj375y6a4M8il3Rj-S_5270",
@@ -68,18 +68,8 @@ export default function App() {
 
   const persist = async (updated) => {
     setSaving(true);
-    try {
-      await Promise.all([
-        setDoc(TEAMS_DOC, { list: updated.teams }),
-        setDoc(PLAYERS_DOC, { list: updated.players }),
-        setDoc(EVENTS_DOC, { list: updated.events }),
-        setDoc(SCORES_DOC, { map: updated.scores }),
-      ]);
-      setData(updated);
-    } catch(e) {
-      console.error("Errore salvataggio:", e);
-      showToast("Errore salvataggio!", "err");
-    }
+    try { await setDoc(DATA_DOC, updated); setData(updated); }
+    catch(e) { console.error("Errore salvataggio:", e); showToast("Errore salvataggio!", "err"); }
     setSaving(false);
   };
 

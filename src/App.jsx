@@ -68,7 +68,10 @@ export default function App() {
 
   const persist = async (updated) => {
     setSaving(true);
-    try { await setDoc(DATA_DOC, updated); setData(updated); }
+    try {
+      await setDoc(DATA_DOC, { json: JSON.stringify(updated) });
+      setData(updated);
+    }
     catch(e) { console.error("Errore salvataggio:", e); showToast("Errore salvataggio: " + e.message, "err"); }
     setSaving(false);
   };

@@ -68,8 +68,22 @@ export default function App() {
 
   const persist = async (updated) => {
     setSaving(true);
-    try { await setDoc(DATA_DOC, updated); setData(updated); }
-    catch(e) { console.error("Errore salvataggio:", e); showToast("Errore salvataggio!", "err"); }
+    try {
+      // Salva in 3 documenti separati per evitare limite 1MB Firestore
+      const batch1 = { teams: updated.teams, players: updated.players };
+      const batch2 = { events: updated.events };
+      const batch3 = { scores: updated.scores };
+      await Promise.all([
+        setDoc(doc(db, "data", "meta"), batch1),
+        setDoc(doc(db, "data", "events"), batch2),
+        setDoc(doc(db, "data", "scores"), batch3),
+      ]);
+      setData(updated);
+    }
+    catch(e) {
+      console.error("Errore salvataggio:", e);
+      showToast("Errore salvataggio: " + e.message, "err");
+    }
     setSaving(false);
   };
 

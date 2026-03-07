@@ -36,6 +36,9 @@ export default function App() {
 
   const [newTeam, setNewTeam] = useState("");
   const [newPlayer, setNewPlayer] = useState({ name: "", teamId: "" });
+  const [adminPlayerSearch, setAdminPlayerSearch] = useState("");
+  const [adminTeamFilter, setAdminTeamFilter] = useState("");
+  const [duplicatePlayer, setDuplicatePlayer] = useState(null); // { existing, incoming }
   const [newEventDate, setNewEventDate] = useState(new Date().toISOString().split("T")[0]);
   const [newEventName, setNewEventName] = useState("");
   const [activeEventId, setActiveEventId] = useState(null);
@@ -186,7 +189,39 @@ export default function App() {
 
   const addTeam = async () => { if (!newTeam.trim()) return; await persist({ ...data, teams: [...data.teams, { id: Date.now().toString(), name: newTeam.trim() }] }); setNewTeam(""); showToast("Team aggiunto!"); };
   const removeTeam = async (id) => { await persist({ ...data, teams: data.teams.filter(t => t.id !== id), players: data.players.filter(p => p.teamId !== id) }); showToast("Team rimosso", "err"); };
-  const addPlayer = async () => { if (!newPlayer.name.trim() || !newPlayer.teamId) return; await persist({ ...data, players: [...data.players, { id: Date.now().toString(), name: newPlayer.name.trim(), teamId: newPlayer.teamId, active: true }] }); setNewPlayer({ name: "", teamId: "" }); showToast("Player aggiunto!"); };
+  const addPlayer = async () => {
+    if (!newPlayer.name.trim() || !newPlayer.teamId) return;
+    const existing = data.players.find(p => p.name.trim().toLowerCase() === newPlayer.name.trim().toLowerCase());
+    if (existing) {
+      setDuplicatePlayer({ existing, incoming: { ...newPlayer } });
+      return;
+    }
+    await persist({ ...data, players: [...data.players, { id: Date.now().toString(), name: newPlayer.name.trim(), teamId: newPlayer.teamId, active: true }] });
+    setNewPlayer({ name: "", teamId: "" });
+    showToast("Player aggiunto!");
+  };
+  const mergeDuplicatePlayer = async () => {
+    if (!duplicatePlayer) return;
+    const { existing, incoming } = duplicatePlayer;
+    const players = data.players.map(p => p.id === existing.id
+      ? { ...p, teamId: incoming.teamId, teamYear: new Date().getFullYear().toString(), active: true }
+      : p);
+    await persist({ ...data, players });
+    setDuplicatePlayer(null);
+    setNewPlayer({ name: "", teamId: "" });
+    showToast("Player aggiornato e riattivato!");
+  };
+  const renameDuplicatePlayer = async (newName) => {
+    if (!newName.trim()) return;
+    if (data.players.find(p => p.name.trim().toLowerCase() === newName.trim().toLowerCase())) {
+      showToast("Nome già esistente!", "err"); return;
+    }
+    const { incoming } = duplicatePlayer;
+    await persist({ ...data, players: [...data.players, { id: Date.now().toString(), name: newName.trim(), teamId: incoming.teamId, active: true }] });
+    setDuplicatePlayer(null);
+    setNewPlayer({ name: "", teamId: "" });
+    showToast("Nuovo player aggiunto!");
+  };
   const removePlayer = async (id) => { await persist({ ...data, players: data.players.filter(p => p.id !== id) }); showToast("Player rimosso", "err"); };
   const togglePlayerActive = async (id) => {
     const players = data.players.map(p => p.id === id ? { ...p, active: p.active === false ? true : false } : p);
@@ -1188,8 +1223,20 @@ export default function App() {
                   </div>
                 </div>
 
+                <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                  <input className="inp" placeholder="🔍 Cerca player..." value={adminPlayerSearch} onChange={e => setAdminPlayerSearch(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
+                  <select className="inp" value={adminTeamFilter} onChange={e => setAdminTeamFilter(e.target.value)} style={{ width: "auto" }}>
+                    <option value="">Tutti i team</option>
+                    {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    <option value="none">Senza team</option>
+                  </select>
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
-                  {data.players.map(p => {
+                  {data.players.filter(p => {
+                    const matchSearch = !adminPlayerSearch || p.name.toLowerCase().includes(adminPlayerSearch.toLowerCase());
+                    const matchTeam = !adminTeamFilter || (adminTeamFilter === "none" ? !p.teamId : p.teamId === adminTeamFilter);
+                    return matchSearch && matchTeam;
+                  }).sort((a,b) => a.name.localeCompare(b.name)).map(p => {
                     const ti = data.teams.findIndex(t => t.id === p.teamId);
                     const team = data.teams.find(t => t.id === p.teamId);
                     const isActive = p.active !== false;
@@ -1375,7 +1422,34 @@ export default function App() {
           </div>
         )}
 
-        {/* LOGIN */}
+        {/* DUPLICATE PLAYER DIALOG */}
+        {duplicatePlayer && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div className="card" style={{ maxWidth: 400, width: "100%", borderColor: "#eab308" }}>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: "#eab308", marginBottom: 8 }}>⚠️ Player già esistente</h3>
+              <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>
+                <strong style={{ color: "#f0f0f0" }}>{duplicatePlayer.existing.name}</strong> è già presente nel database{duplicatePlayer.existing.active === false ? " (storico)" : ""}.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                <button className="btn btn-g" onClick={mergeDuplicatePlayer}>
+                  ✅ Aggrega — aggiorna team e riattiva
+                </button>
+                <div>
+                  <p style={{ color: "#555", fontSize: 12, marginBottom: 6 }}>✏️ Omonimo — inserisci con nome diverso:</p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="inp" defaultValue={duplicatePlayer.incoming.name + " 2"}
+                      onKeyDown={e => e.key === "Enter" && renameDuplicatePlayer(e.target.value)}
+                      id="rename-input" />
+                    <button className="btn btn-o" onClick={() => renameDuplicatePlayer(document.getElementById("rename-input").value)}>OK</button>
+                  </div>
+                </div>
+              </div>
+              <button className="btn btn-ghost" style={{ width: "100%" }} onClick={() => setDuplicatePlayer(null)}>Annulla</button>
+            </div>
+          </div>
+        )}
+
+        {/* LOGIN */}}
         {page === "login" && (
           <div style={{ maxWidth: 360, margin: "60px auto" }}>
             <div className="card">

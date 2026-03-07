@@ -599,8 +599,9 @@ export default function App() {
 
         {/* HOME - Selezione Team */}
         {page === "home" && (
-          <div>
-            <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ position: "relative" }}>
+            <div style={{ position: "fixed", inset: 0, backgroundImage: "url('/logo2.png')", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundSize: "min(60vw, 400px)", opacity: 0.04, pointerEvents: "none", zIndex: 0 }} />
+            <div style={{ position: "relative", zIndex: 1, textAlign: "center", marginBottom: 28 }}>
               <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 6 }}>Seleziona il tuo Team</h2>
               <p style={{ color: "#555", fontSize: 13 }}>Clicca per vedere la classifica dell'ultimo mese</p>
             </div>
@@ -629,7 +630,8 @@ export default function App() {
 
         {/* CLASSIFICA */}
         {page === "players" && (
-          <div>
+          <div style={{ position: "relative" }}>
+            <div style={{ position: "fixed", inset: 0, backgroundImage: "url('/logo2.png')", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundSize: "min(60vw, 400px)", opacity: 0.04, pointerEvents: "none", zIndex: 0 }} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
               <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>🏅 Classifica</h2>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

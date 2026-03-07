@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch } from "firebase/firestore";
+import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC2o4K_UQwhdj375y6a4M8il3Rj-S_5270",
@@ -68,18 +68,8 @@ export default function App() {
 
   const persist = async (updated) => {
     setSaving(true);
-    try {
-      await Promise.all([
-        setDoc(TEAMS_DOC, { list: updated.teams }),
-        setDoc(PLAYERS_DOC, { list: updated.players }),
-        setDoc(EVENTS_DOC, { list: updated.events }),
-        setDoc(SCORES_DOC, { map: updated.scores }),
-      ]);
-      setData(updated);
-    } catch(e) {
-      console.error("Errore salvataggio:", e);
-      showToast("Errore salvataggio!", "err");
-    }
+    try { await setDoc(DATA_DOC, updated); setData(updated); }
+    catch { showToast("Errore salvataggio!", "err"); }
     setSaving(false);
   };
 
@@ -288,7 +278,7 @@ export default function App() {
     return { isoDate, eventYear, fullName: isoDate || (fileYear ? `${raw} (${fileYear})` : raw) };
   };
 
-  const importExcel = async (file, forceStorico = false) => {
+  const importExcel = async (file) => {
     try {
       const yearMatch = file.name.match(/(20\d{2})/);
       const fileYear = yearMatch ? yearMatch[1] : null;
@@ -1163,16 +1153,10 @@ export default function App() {
                 <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>📥 Importa da Excel / Google Sheets</div>
                 <div style={{ color: "#666", fontSize: 13 }}>Scarica il tuo Google Sheets come .xlsx e caricalo. Un foglio = un team, colonna A = player, riga 1 = eventi, "-" = assente. L'anno viene letto dal nome del file (es. "Punteggi 2023.xlsx").</div>
               </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <label style={{ cursor: "pointer" }}>
-                  <span className="btn btn-o" style={{ display: "inline-block" }}>📥 Importa Attivi</span>
-                  <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importExcel(e.target.files[0], false); e.target.value = ""; }} />
-                </label>
-                <label style={{ cursor: "pointer" }}>
-                  <span className="btn btn-ghost" style={{ display: "inline-block" }}>📦 Importa Storici</span>
-                  <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importExcel(e.target.files[0], true); e.target.value = ""; }} />
-                </label>
-              </div>
+              <label style={{ cursor: "pointer" }}>
+                <span className="btn btn-o" style={{ display: "inline-block" }}>📂 Carica file .xlsx</span>
+                <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) importExcel(e.target.files[0]); e.target.value = ""; }} />
+              </label>
             </div>
 
             {/* Reset */}

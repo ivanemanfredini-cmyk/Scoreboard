@@ -22,6 +22,12 @@ const COLORS = ["#f97316","#3b82f6","#22c55e","#a855f7","#eab308","#ec4899","#14
   "#f43f5e","#84cc16","#0ea5e9","#d946ef","#fb923c","#4ade80","#60a5fa","#c084fc","#fbbf24","#34d399"];
 
 const emptyData = { teams: [], players: [], events: [], scores: {} };
+const safeData = (d) => ({
+  teams: Array.isArray(d?.teams) ? d.teams : [],
+  players: Array.isArray(d?.players) ? d.players : [],
+  events: Array.isArray(d?.events) ? d.events : [],
+  scores: (d?.scores && typeof d.scores === "object" && !Array.isArray(d.scores)) ? d.scores : {},
+});
 
 export default function App() {
   const [data, setData] = useState(emptyData);
@@ -59,8 +65,8 @@ export default function App() {
 
   useEffect(() => {
     const unsub = onSnapshot(DATA_DOC, (snap) => {
-      if (snap.exists()) setData(snap.data());
-      else setData(emptyData);
+      if (snap.exists()) setData(safeData(snap.data()));
+      else setData({ ...emptyData });
       setLoading(false);
     }, () => setLoading(false));
     return () => unsub();
@@ -70,7 +76,7 @@ export default function App() {
     setSaving(true);
     try {
       await setDoc(DATA_DOC, { json: JSON.stringify(updated) });
-      setData(updated);
+      setData(safeData(updated));
     }
     catch(e) { console.error("Errore salvataggio:", e); showToast("Errore salvataggio: " + e.message, "err"); }
     setSaving(false);

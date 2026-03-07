@@ -327,7 +327,7 @@ export default function App() {
         rows.slice(1).forEach(row => {
           const playerName = String(row[0] || "").trim();
           if (!playerName) return;
-          const isStorico = sheetName === "Storico";
+          const isStorico = sheetName.toLowerCase() === "storico";
           let playerIdx = newPlayers.findIndex(p => p.name === playerName);
           let player;
 
@@ -466,6 +466,18 @@ export default function App() {
   ];
 
   // Ultimo mese/anno disponibile negli eventi
+  // Auto-imposta ultimo anno/mese quando i dati arrivano
+  useEffect(() => {
+    if (data.events.length > 0 && selectedYearFilter === "all") {
+      const sorted = [...data.events].sort((a, b) => new Date(b.date) - new Date(a.date));
+      const last = sorted[0];
+      const y = last.year || last.date?.substring(0, 4);
+      const m = last.date?.substring(5, 7);
+      if (y) setSelectedYearFilter(y);
+      if (m) setSelectedMonthFilter(m);
+    }
+  }, [data.events]);
+
   const lastEventDate = useMemo(() => {
     if (data.events.length === 0) return null;
     const sorted = [...data.events].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -597,7 +609,7 @@ export default function App() {
               : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
                   {data.teams.map((t, i) => {
                     const color = teamColor(t.id);
-                    const rosterCount = data.players.filter(p => p.teamId === t.id && p.active !== false).length;
+                    const rosterCount = data.players.filter(p => p.teamId === t.id && p.active === true).length;
                     return (
                       <button key={t.id} onClick={() => goToTeam(t.id)}
                         style={{ background: "#15151e", border: `2px solid ${color}`, borderRadius: 16, padding: "28px 16px", cursor: "pointer", fontFamily: "inherit", textAlign: "center", transition: "all .2s", boxShadow: `0 0 20px ${color}22` }}
@@ -627,7 +639,7 @@ export default function App() {
                 {data.teams.length > 0 && (
                   <select className="inp" style={{ width: "auto", fontSize: 13 }} value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)}>
                     <option value="all">Tutti i team</option>
-                    {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {data.teams.filter(t => t.name.toLowerCase() !== "storico").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 )}
               </div>
@@ -783,11 +795,10 @@ export default function App() {
         {page === "hall" && (() => {
           const totalEvents = filteredEvents.length;
           const minPresenze = Math.ceil(totalEvents * 0.5);
-          const eligible = playerStats.filter(p => p.count >= minPresenze);
+          const eligible = playerStats.filter(p => p.active !== false && p.count >= minPresenze);
           const top10avg = [...eligible].sort((a, b) => b.avg - a.avg).slice(0, 10);
           const top10best = [...eligible].sort((a, b) => b.best - a.best).slice(0, 10);
-          const top10presence = [...playerStats].sort((a, b) => b.count - a.count).slice(0, 10);
-          const historic = [...playerStats].filter(p => p.active === false).sort((a, b) => b.avg - a.avg);
+          const top10presence = [...playerStats].filter(p => p.active !== false).sort((a, b) => b.count - a.count).slice(0, 10);
 
           const HallTable = ({ players, valueKey, valueLabel, valueColor }) => {
             const showPresenze = valueKey !== "count";
@@ -829,7 +840,7 @@ export default function App() {
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <select className="filter-btn" value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)}>
                     <option value="">Tutti i team</option>
-                    {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {data.teams.filter(t => t.name.toLowerCase() !== "storico").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                   <YearFilter value={selectedYearFilter} onChange={setSelectedYearFilter} />
                 </div>
@@ -853,12 +864,7 @@ export default function App() {
                 <HallTable players={top10presence} valueKey="count" valueLabel="Presenze" valueColor="#22c55e" />
               </div>
 
-              {historic.length > 0 && (
-                <>
-                  <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#888", marginBottom: 10 }}>📦 Player Storici ({historic.length})</h3>
-                  <HallTable players={historic} valueKey="avg" valueLabel="Media" valueColor="#888" />
-                </>
-              )}
+
             </div>
           );
         })()}
@@ -1235,7 +1241,7 @@ export default function App() {
                     <input className="inp" placeholder="Nome player" value={newPlayer.name} onChange={e => setNewPlayer({ ...newPlayer, name: e.target.value })} />
                     <select className="inp" value={newPlayer.teamId} onChange={e => setNewPlayer({ ...newPlayer, teamId: e.target.value })}>
                       <option value="">Seleziona team</option>
-                      {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      {data.teams.filter(t => t.name.toLowerCase() !== "storico").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                     <button className="btn btn-o" onClick={addPlayer}>Aggiungi</button>
                   </div>
@@ -1245,7 +1251,7 @@ export default function App() {
                   <input className="inp" placeholder="🔍 Cerca player..." value={adminPlayerSearch} onChange={e => setAdminPlayerSearch(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
                   <select className="inp" value={adminTeamFilter} onChange={e => setAdminTeamFilter(e.target.value)} style={{ width: "auto" }}>
                     <option value="">Tutti i team</option>
-                    {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    {data.teams.filter(t => t.name.toLowerCase() !== "storico").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     <option value="none">Senza team</option>
                   </select>
                 </div>
@@ -1274,7 +1280,7 @@ export default function App() {
                             value={p.teamId || ""}
                             onChange={e => updatePlayerTeam(p.id, e.target.value)}>
                             <option value="">— Nessun team —</option>
-                            {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            {data.teams.filter(t => t.name.toLowerCase() !== "storico").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                           </select>
                           <button className={`btn ${isActive ? "btn-yellow" : "btn-g"}`} style={{ padding: "4px 8px", fontSize: 10 }} onClick={() => togglePlayerActive(p.id)}>
                             {isActive ? "📦" : "✅"}

@@ -559,7 +559,6 @@ export default function App() {
           </div>
         </div>
       </div>
-      </div>
 
       {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#09090f", borderTop: "1px solid #1c1c28", zIndex: 100, display: "flex", justifyContent: "space-around", alignItems: "stretch", height: 64 }}>

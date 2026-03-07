@@ -607,15 +607,14 @@ export default function App() {
             {data.teams.length === 0
               ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Nessun team ancora. Vai in ⚙️ Gestisci per aggiungerne.</div>
               : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
-                  {data.teams.map((t, i) => {
-                    const color = teamColor(t.id);
+                  {data.teams.filter(t => t.name.toLowerCase() !== "storico").map((t) => {
                     const rosterCount = data.players.filter(p => p.teamId === t.id && p.active === true).length;
                     return (
                       <button key={t.id} onClick={() => goToTeam(t.id)}
-                        style={{ background: "#15151e", border: `2px solid ${color}`, borderRadius: 16, padding: "28px 16px", cursor: "pointer", fontFamily: "inherit", textAlign: "center", transition: "all .2s", boxShadow: `0 0 20px ${color}22` }}
-                        onMouseEnter={e => { e.currentTarget.style.background = `${color}22`; e.currentTarget.style.transform = "scale(1.04)"; }}
+                        style={{ background: "#15151e", border: "2px solid #2a2a38", borderRadius: 16, padding: "28px 16px", cursor: "pointer", fontFamily: "inherit", textAlign: "center", transition: "all .2s" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "#1e1e2e"; e.currentTarget.style.transform = "scale(1.04)"; }}
                         onMouseLeave={e => { e.currentTarget.style.background = "#15151e"; e.currentTarget.style.transform = "scale(1)"; }}>
-                        <div style={{ width: 48, height: 48, borderRadius: "50%", background: color, margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: `0 0 16px ${color}88` }}>
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#2a2a38", margin: "0 auto 12px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
                           🛡️
                         </div>
                         <div style={{ fontWeight: 800, fontSize: 16, color: "#f0f0f0", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>{t.name}</div>

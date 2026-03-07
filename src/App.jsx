@@ -317,11 +317,13 @@ export default function App() {
         rows.slice(1).forEach(row => {
           const playerName = String(row[0] || "").trim();
           if (!playerName) return;
+          const isStorico = sheetName === "Storico";
           let playerIdx = newPlayers.findIndex(p => p.name === playerName);
           let player;
 
           if (playerIdx === -1) {
-            player = { id: "p_" + Date.now() + Math.random().toString(36).slice(2), name: playerName, teamId: team.id, teamYear: fileYear || "0", active: true };
+            const isInactive = isStorico || forceStorico;
+            player = { id: "p_" + Date.now() + Math.random().toString(36).slice(2), name: playerName, teamId: isInactive ? "" : team.id, teamYear: isInactive ? "0" : (fileYear || "0"), active: !isInactive };
             newPlayers.push(player); imported.players++;
           } else {
             player = { ...newPlayers[playerIdx] };

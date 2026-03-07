@@ -15,8 +15,8 @@ const firebaseConfig = {
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
-const DATA_DOC = doc(db, "scoreboard", "data");
+const db = getDatabase(firebaseApp);
+const DATA_REF = ref(db, "scoreboard");
 
 const ADMIN_PASSWORD = "admin2024";
 const COLORS = ["#f97316","#3b82f6","#22c55e","#a855f7","#eab308","#ec4899","#14b8a6","#ef4444","#8b5cf6","#06b6d4",
@@ -65,11 +65,11 @@ export default function App() {
 
 
   useEffect(() => {
-    const unsub = onSnapshot(DATA_DOC, (snap) => {
-      if (snap.exists()) setData(safeData(snap.data()));
+    const unsub = onValue(DATA_REF, (snap) => {
+      if (snap.exists()) setData(safeData(snap.val()));
       else setData({ ...emptyData });
       setLoading(false);
-    }, () => setLoading(false));
+    });
     return () => unsub();
   }, []);
 

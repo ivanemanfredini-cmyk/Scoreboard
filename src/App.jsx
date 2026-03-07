@@ -189,6 +189,21 @@ export default function App() {
 
   const addTeam = async () => { if (!newTeam.trim()) return; await persist({ ...data, teams: [...data.teams, { id: Date.now().toString(), name: newTeam.trim() }] }); setNewTeam(""); showToast("Team aggiunto!"); };
   const removeTeam = async (id) => { await persist({ ...data, teams: data.teams.filter(t => t.id !== id), players: data.players.filter(p => p.teamId !== id) }); showToast("Team rimosso", "err"); };
+  const addPlayerWithStatus = async (active) => {
+    if (!newPlayer.name.trim()) return;
+    if (!active && !newPlayer.teamId) {
+      // storico senza team ok
+    } else if (active && !newPlayer.teamId) return;
+    const existing = data.players.find(p => p.name.trim().toLowerCase() === newPlayer.name.trim().toLowerCase());
+    if (existing) {
+      setDuplicatePlayer({ existing, incoming: { ...newPlayer } });
+      return;
+    }
+    await persist({ ...data, players: [...data.players, { id: Date.now().toString(), name: newPlayer.name.trim(), teamId: newPlayer.teamId || "", teamYear: new Date().getFullYear().toString(), active }] });
+    setNewPlayer({ name: "", teamId: "" });
+    showToast(active ? "Player attivo aggiunto!" : "Player storico aggiunto!");
+  };
+
   const addPlayer = async () => {
     if (!newPlayer.name.trim() || !newPlayer.teamId) return;
     const existing = data.players.find(p => p.name.trim().toLowerCase() === newPlayer.name.trim().toLowerCase());
@@ -1216,10 +1231,11 @@ export default function App() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <input className="inp" placeholder="Nome player" value={newPlayer.name} onChange={e => setNewPlayer({ ...newPlayer, name: e.target.value })} />
                     <select className="inp" value={newPlayer.teamId} onChange={e => setNewPlayer({ ...newPlayer, teamId: e.target.value })}>
-                      <option value="">Seleziona team</option>
+                      <option value="">— Team (opzionale per storici) —</option>
                       {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <button className="btn btn-o" onClick={addPlayer}>Aggiungi</button>
+                    <button className="btn btn-o" onClick={() => addPlayerWithStatus(true)}>✅ Attivo</button>
+                    <button className="btn btn-ghost" onClick={() => addPlayerWithStatus(false)}>📦 Storico</button>
                   </div>
                 </div>
 

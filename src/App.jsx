@@ -1449,7 +1449,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LOGIN */}}
+        {/* LOGIN */}
         {page === "login" && (
           <div style={{ maxWidth: 360, margin: "60px auto" }}>
             <div className="card">
@@ -1469,6 +1469,8 @@ export default function App() {
       </div>
 
       {toast && <div className="toast" style={{ background: toast.type === "err" ? "#ef4444" : "#22c55e", color: "#fff" }}>{toast.msg}</div>}
+      </div>
+      </div>
     </div>
   );
 }

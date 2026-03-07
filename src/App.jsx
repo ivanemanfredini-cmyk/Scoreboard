@@ -329,7 +329,7 @@ export default function App() {
             player = { ...newPlayers[playerIdx] };
             // Se è storico, registra conflitto
             if (player.active === false && !conflicts.find(c => c.originalName === playerName)) {
-              conflicts.push({ originalName: playerName, playerId: player.id, teamName: sheetName, teamId: team.id, action: "merge" /* o "rename" */, newName: playerName });
+              conflicts.push({ originalName: playerName, playerId: player.id, teamName: sheetName, teamId: team.id, action: "merge", newName: playerName, forceStorico });
             }
             const currentYear = parseInt(player.teamYear || "0");
             const newYear = parseInt(fileYear || "0");
@@ -394,9 +394,9 @@ export default function App() {
           }
         });
       } else {
-        // merge: riattiva il player storico
+        // merge: riattiva solo se non è un import storico
         const idx = newPlayers.findIndex(p => p.id === c.playerId);
-        if (idx !== -1) newPlayers[idx] = { ...newPlayers[idx], active: true };
+        if (idx !== -1) newPlayers[idx] = { ...newPlayers[idx], active: c.forceStorico ? false : true };
       }
     });
 
@@ -1403,14 +1403,16 @@ export default function App() {
                     <button
                       className={`filter-btn${c.action === "merge" ? " on" : ""}`}
                       onClick={() => setImportPreview(prev => ({ ...prev, conflicts: prev.conflicts.map((x, j) => j === i ? { ...x, action: "merge" } : x) }))}>
-                      ✅ Aggrega — è tornato attivo, unisci i dati
+                      {c.forceStorico ? "📦 Unisci dati (rimane storico)" : "✅ Aggrega — è tornato attivo, unisci i dati"}
                     </button>
-                    <button
-                      className={`filter-btn${c.action === "rename" ? " on" : ""}`}
-                      style={{ borderColor: c.action === "rename" ? "#ef4444" : undefined, background: c.action === "rename" ? "#ef4444" : undefined }}
-                      onClick={() => setImportPreview(prev => ({ ...prev, conflicts: prev.conflicts.map((x, j) => j === i ? { ...x, action: "rename" } : x) }))}>
-                      ✏️ Omonimo — crea nuovo player con nome diverso
-                    </button>
+                    {!c.forceStorico && (
+                      <button
+                        className={`filter-btn${c.action === "rename" ? " on" : ""}`}
+                        style={{ borderColor: c.action === "rename" ? "#ef4444" : undefined, background: c.action === "rename" ? "#ef4444" : undefined }}
+                        onClick={() => setImportPreview(prev => ({ ...prev, conflicts: prev.conflicts.map((x, j) => j === i ? { ...x, action: "rename" } : x) }))}>
+                        ✏️ Omonimo — crea nuovo player con nome diverso
+                      </button>
+                    )}
                   </div>
                   {c.action === "rename" && (
                     <div style={{ marginTop: 10 }}>

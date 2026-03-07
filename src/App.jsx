@@ -2,9 +2,10 @@ import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import * as XLSX from "xlsx";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+import { getDatabase, ref, set, onValue } from "firebase/database";
 
 const firebaseConfig = {
+  databaseURL: "https://raccolta-punteggi-italy-default-rtdb.firebaseio.com",
   apiKey: "AIzaSyC2o4K_UQwhdj375y6a4M8il3Rj-S_5270",
   authDomain: "raccolta-punteggi-italy.firebaseapp.com",
   projectId: "raccolta-punteggi-italy",
@@ -75,7 +76,7 @@ export default function App() {
   const persist = async (updated) => {
     setSaving(true);
     try {
-      await setDoc(DATA_DOC, { json: JSON.stringify(updated) });
+      await set(DATA_REF, updated);
       setData(safeData(updated));
     }
     catch(e) { console.error("Errore salvataggio:", e); showToast("Errore salvataggio: " + e.message, "err"); }

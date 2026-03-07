@@ -81,7 +81,7 @@ export default function App() {
   // Anni e mesi disponibili dagli eventi
   const availableYears = useMemo(() => {
     const years = new Set();
-    data.events.forEach(e => {
+    (data.events || []).forEach(e => {
       const y = e.year || (e.date ? e.date.substring(0, 4) : null);
       if (y) years.add(y);
     });
@@ -92,7 +92,7 @@ export default function App() {
 
   const availableMonths = useMemo(() => {
     const months = new Set();
-    const eventsToCheck = selectedYearFilter === "all" ? data.events : data.events.filter(e => {
+    const eventsToCheck = selectedYearFilter === "all" ? (data.events || []) : (data.events || []).filter(e => {
       const y = e.year || (e.date ? e.date.substring(0, 4) : null);
       return y === selectedYearFilter;
     });
@@ -107,7 +107,7 @@ export default function App() {
 
   // Filtra eventi per anno e mese
   const filteredEvents = useMemo(() => {
-    return data.events.filter(e => {
+    return (data.events || []).filter(e => {
       const y = e.year || (e.date ? e.date.substring(0, 4) : null);
       const m = e.date ? e.date.substring(5, 7) : null;
       if (selectedYearFilter !== "all" && y !== selectedYearFilter) return false;
@@ -117,7 +117,7 @@ export default function App() {
   }, [data.events, selectedYearFilter, selectedMonthFilter]);
 
   const playerStats = useMemo(() => {
-    return data.players.map(p => {
+    return (data.players || []).map(p => {
       let total = 0, count = 0, absences = 0, best = 0;
       filteredEvents.forEach(e => {
         const s = data.scores[e.id]?.[p.id];
@@ -149,7 +149,7 @@ export default function App() {
   const sortedEvents = useMemo(() => [...filteredEvents].sort((a, b) => new Date(b.date) - new Date(a.date)), [filteredEvents]);
 
   const chartFilteredEvents = useMemo(() => {
-    return data.events.filter(e => {
+    return (data.events || []).filter(e => {
       const y = e.year || (e.date ? e.date.substring(0, 4) : null);
       const m = e.date ? e.date.substring(5, 7) : null;
       if (chartYear !== "all" && y !== chartYear) return false;

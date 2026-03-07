@@ -586,7 +586,7 @@ export default function App() {
               ? <div className="card" style={{ textAlign: "center", color: "#444", padding: 50 }}>Nessun team ancora. Vai in ⚙️ Gestisci per aggiungerne.</div>
               : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
                   {data.teams.map((t, i) => {
-                    const color = COLORS[i % COLORS.length];
+                    const color = teamColor(t.id);
                     const rosterCount = data.players.filter(p => p.teamId === t.id && p.active !== false).length;
                     return (
                       <button key={t.id} onClick={() => goToTeam(t.id)}
@@ -750,7 +750,7 @@ export default function App() {
                     {teamStats.map(({ team, teamPlayers, freeSlots, alert2, mediaPresenze, mediaPunteggio }, i) => (
                       <tr key={team.id} className="tr" style={{ borderBottom: "1px solid #1c1c28" }}>
                         <td style={{ padding: "12px 14px", fontWeight: 800, fontSize: 15 }}>
-                          <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: COLORS[i % COLORS.length], marginRight: 8 }}></span>
+                          <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: teamColor(team.id), marginRight: 8 }}></span>
                           {team.name}
                         </td>
                         <td style={{ padding: "12px 14px", textAlign: "center", color: "#aaa", fontWeight: 700 }}>{teamPlayers.length}/50</td>
@@ -1202,7 +1202,7 @@ export default function App() {
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <span style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 7 }}>
-                            <span style={{ width: 9, height: 9, borderRadius: "50%", background: COLORS[i % COLORS.length], display: "inline-block" }}></span>
+                            <span style={{ width: 9, height: 9, borderRadius: "50%", background: teamColor(t.id), display: "inline-block" }}></span>
                             {t.name} <span style={{ color: "#444", fontSize: 12 }}>({data.players.filter(p => p.teamId === t.id).length})</span>
                           </span>
                           <div style={{ display: "flex", gap: 6 }}>

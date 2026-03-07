@@ -742,40 +742,50 @@ export default function App() {
           const top10presence = [...playerStats].sort((a, b) => b.count - a.count).slice(0, 10);
           const historic = [...playerStats].filter(p => p.active === false).sort((a, b) => b.avg - a.avg);
 
-          const HallTable = ({ players, valueKey, valueLabel, valueColor }) => (
-            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
-                    {["#","Player","Team","Presenze", valueLabel].map(h => (
-                      <th key={h} style={{ padding: "10px 14px", textAlign: ["Player","Team"].includes(h) ? "left" : "center", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {players.map((p, i) => (
-                    <tr key={p.id} className="tr" style={{ borderBottom: "1px solid #1c1c28" }}>
-                      <td style={{ padding: "10px 14px", textAlign: "center", width: 36 }}>
-                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : <span style={{ color: "#444", fontWeight: 700 }}>{i+1}</span>}
-                      </td>
-                      <td style={{ padding: "10px 14px", fontWeight: 700 }}>
-                        <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: playerColor(p.id), marginRight: 7 }}></span>{p.name}
-                      </td>
-                      <td style={{ padding: "10px 14px", color: "#888", fontSize: 13 }}>{p.teamName}</td>
-                      <td style={{ padding: "10px 14px", textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{p.count}</td>
-                      <td style={{ padding: "10px 14px", textAlign: "center", fontWeight: 800, fontSize: 16, color: valueColor }}>{fmtNum(p[valueKey])}</td>
+          const HallTable = ({ players, valueKey, valueLabel, valueColor }) => {
+            const showPresenze = valueKey !== "count";
+            const headers = ["#","Player","Team", ...(showPresenze ? ["Presenze"] : []), valueLabel];
+            return (
+              <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
+                      {headers.map(h => (
+                        <th key={h} style={{ padding: "10px 14px", textAlign: ["Player","Team"].includes(h) ? "left" : "center", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".08em" }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
+                  </thead>
+                  <tbody>
+                    {players.map((p, i) => (
+                      <tr key={p.id} className="tr" style={{ borderBottom: "1px solid #1c1c28" }}>
+                        <td style={{ padding: "10px 14px", textAlign: "center", width: 36 }}>
+                          {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : <span style={{ color: "#444", fontWeight: 700 }}>{i+1}</span>}
+                        </td>
+                        <td style={{ padding: "10px 14px", fontWeight: 700 }}>
+                          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: playerColor(p.id), marginRight: 7 }}></span>{p.name}
+                        </td>
+                        <td style={{ padding: "10px 14px", color: "#888", fontSize: 13 }}>{p.teamName}</td>
+                        {showPresenze && <td style={{ padding: "10px 14px", textAlign: "center", color: "#22c55e", fontWeight: 700 }}>{p.count}</td>}
+                        <td style={{ padding: "10px 14px", textAlign: "center", fontWeight: 800, fontSize: 16, color: valueColor }}>{fmtNum(p[valueKey])}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          };
 
           return (
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
                 <h2 style={{ fontSize: 28, fontWeight: 800, textTransform: "uppercase", color: "#f97316" }}>🏆 Hall of Fame</h2>
-                <YearFilter value={selectedYearFilter} onChange={setSelectedYearFilter} />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <select className="filter-btn" value={selectedTeamFilter} onChange={e => setSelectedTeamFilter(e.target.value)}>
+                    <option value="">Tutti i team</option>
+                    {data.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  <YearFilter value={selectedYearFilter} onChange={setSelectedYearFilter} />
+                </div>
               </div>
               {totalEvents > 0 && <p style={{ color: "#555", fontSize: 12, marginBottom: 20 }}>Qualifica: minimo {minPresenze} presenze su {totalEvents} eventi ({Math.round(minPresenze/totalEvents*100)}%)</p>}
 
@@ -1266,7 +1276,7 @@ export default function App() {
               </div>
 
               {/* Rampa 3+ eventi */}
-              <div>
+              <div style={{ marginBottom: 28 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#ef4444", marginBottom: 10 }}>
                   🔴 Rampa di lancio — 3+ assenze consecutive ({alert3plus.length})
                 </h3>
@@ -1288,11 +1298,40 @@ export default function App() {
                     </div>
                 }
               </div>
+
+              {/* Pedatona 5+ eventi */}
+              {(() => {
+                const pedatona = data.players.filter(p => p.active !== false && getConsecutiveAbsences(p.id, allEvents) >= 5);
+                return (
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#7c3aed", marginBottom: 10 }}>
+                      🥾 Pedatona — 5+ assenze consecutive ({pedatona.length})
+                    </h3>
+                    {pedatona.length === 0
+                      ? <div className="card" style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player in pedatona.</div>
+                      : <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
+                                {["Player","Team","Assenze consecutive"].map(h => (
+                                  <th key={h} style={{ padding: "10px 14px", textAlign: h === "Assenze consecutive" ? "center" : "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pedatona.map(p => <PlayerRow key={p.id} p={p} absences={getConsecutiveAbsences(p.id, allEvents)} color="#7c3aed" />)}
+                            </tbody>
+                          </table>
+                        </div>
+                    }
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
 
-        {/* IMPORT REVIEW */}}
+        {/* IMPORT REVIEW */}
         {page === "import-review" && importPreview && (
           <div>
             <h2 style={{ fontSize: 24, fontWeight: 800, textTransform: "uppercase", color: "#f97316", marginBottom: 6 }}>⚠️ Revisione Import</h2>

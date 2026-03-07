@@ -1301,8 +1301,10 @@ export default function App() {
         {/* RAMPA DI LANCIO */}
         {page === "rampa" && (() => {
           const allEvents = [...data.events].sort((a, b) => new Date(b.date) - new Date(a.date));
-          const alert2 = data.players.filter(p => p.active !== false && getConsecutiveAbsences(p.id, allEvents) === 2);
-          const alert3plus = data.players.filter(p => p.active !== false && getConsecutiveAbsences(p.id, allEvents) >= 3);
+          const activePlayers = data.players.filter(p => p.active !== false);
+          const alert2 = activePlayers.filter(p => getConsecutiveAbsences(p.id, allEvents) === 2);
+          const alert3 = activePlayers.filter(p => { const n = getConsecutiveAbsences(p.id, allEvents); return n === 3 || n === 4; });
+          const alert5 = activePlayers.filter(p => getConsecutiveAbsences(p.id, allEvents) >= 5);
 
           const PlayerRow = ({ p, absences, color }) => {
             const team = data.teams.find(t => t.id === p.teamId);
@@ -1326,7 +1328,7 @@ export default function App() {
               {/* Allerta 2 eventi */}
               <div style={{ marginBottom: 28 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#eab308", marginBottom: 10 }}>
-                  ⚠️ In allerta — 2 assenze consecutive ({alert2.length})
+                  ⚠️ In allerta — assenti negli ultimi 2 eventi ({alert2.length})
                 </h3>
                 {alert2.length === 0
                   ? <div className="card" style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player in allerta.</div>
@@ -1334,8 +1336,8 @@ export default function App() {
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                           <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
-                            {["Player","Team","Assenze consecutive"].map(h => (
-                              <th key={h} style={{ padding: "10px 14px", textAlign: h === "Assenze consecutive" ? "center" : "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
+                            {["Player","Team","Assenze"].map(h => (
+                              <th key={h} style={{ padding: "10px 14px", textAlign: h === "Assenze" ? "center" : "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1347,24 +1349,24 @@ export default function App() {
                 }
               </div>
 
-              {/* Rampa 3+ eventi */}
+              {/* Rampa 3 eventi */}
               <div style={{ marginBottom: 28 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#ef4444", marginBottom: 10 }}>
-                  🔴 Rampa di lancio — 3+ assenze consecutive ({alert3plus.length})
+                  🔴 Rampa di lancio — assenti negli ultimi 3 eventi ({alert3.length})
                 </h3>
-                {alert3plus.length === 0
+                {alert3.length === 0
                   ? <div className="card" style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player in rampa.</div>
                   : <div className="card" style={{ padding: 0, overflow: "hidden" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                           <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
-                            {["Player","Team","Assenze consecutive"].map(h => (
-                              <th key={h} style={{ padding: "10px 14px", textAlign: h === "Assenze consecutive" ? "center" : "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
+                            {["Player","Team","Assenze"].map(h => (
+                              <th key={h} style={{ padding: "10px 14px", textAlign: h === "Assenze" ? "center" : "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {alert3plus.map(p => <PlayerRow key={p.id} p={p} absences={getConsecutiveAbsences(p.id, allEvents)} color="#ef4444" />)}
+                          {alert3.map(p => <PlayerRow key={p.id} p={p} absences={getConsecutiveAbsences(p.id, allEvents)} color="#ef4444" />)}
                         </tbody>
                       </table>
                     </div>
@@ -1372,33 +1374,28 @@ export default function App() {
               </div>
 
               {/* Pedatona 5+ eventi */}
-              {(() => {
-                const pedatona = data.players.filter(p => p.active !== false && getConsecutiveAbsences(p.id, allEvents) >= 5);
-                return (
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#7c3aed", marginBottom: 10 }}>
-                      🥾 Pedatona — 5+ assenze consecutive ({pedatona.length})
-                    </h3>
-                    {pedatona.length === 0
-                      ? <div className="card" style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player in pedatona.</div>
-                      : <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                            <thead>
-                              <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
-                                {["Player","Team","Assenze consecutive"].map(h => (
-                                  <th key={h} style={{ padding: "10px 14px", textAlign: h === "Assenze consecutive" ? "center" : "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {pedatona.map(p => <PlayerRow key={p.id} p={p} absences={getConsecutiveAbsences(p.id, allEvents)} color="#7c3aed" />)}
-                            </tbody>
-                          </table>
-                        </div>
-                    }
-                  </div>
-                );
-              })()}
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, textTransform: "uppercase", color: "#7c3aed", marginBottom: 10 }}>
+                  🥾 Pedatona — assenti negli ultimi 5 eventi ({alert5.length})
+                </h3>
+                {alert5.length === 0
+                  ? <div className="card" style={{ color: "#444", textAlign: "center", padding: 20 }}>Nessun player in pedatona.</div>
+                  : <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ background: "#111118", borderBottom: "2px solid #21212e" }}>
+                            {["Player","Team","Assenze"].map(h => (
+                              <th key={h} style={{ padding: "10px 14px", textAlign: h === "Assenze" ? "center" : "left", fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: ".07em" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {alert5.map(p => <PlayerRow key={p.id} p={p} absences={getConsecutiveAbsences(p.id, allEvents)} color="#7c3aed" />)}
+                        </tbody>
+                      </table>
+                    </div>
+                }
+              </div>
             </div>
           );
         })()}
